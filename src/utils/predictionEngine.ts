@@ -11,6 +11,7 @@ export interface MatchPrediction {
   over25Prob: number;
   bttsProb: number;
   confidence: number;
+  mostLikelyScore: { home: number; away: number; prob: number };
 }
 
 // Poisson distribution probability
@@ -31,7 +32,7 @@ function factorial(n: number): number {
 function getFormFactor(team: Team): number {
   const maxPoints = 15; // 5 games * 3 points
   const currentPoints = team.form.reduce((sum, r) => sum + r, 0);
-  return 0.8 + (currentPoints / maxPoints) * 0.4; // Range: 0.8 to 1.2
+  return 0.85 + (currentPoints / maxPoints) * 0.3; // Range: 0.85 to 1.15
 }
 
 // Predict expected goals for home team
@@ -50,7 +51,7 @@ function predictAwayGoals(homeTeam: Team, awayTeam: Team): number {
   const homeDefense = homeTeam.defenseStrength;
   const awayForm = getFormFactor(awayTeam);
   // Away teams don't get home advantage bonus
-  const awayPenalty = 0.9;
+  const awayPenalty = 0.92;
 
   return awayAttack * homeDefense * awayForm * awayPenalty;
 }
@@ -91,13 +92,38 @@ function calculateProbabilities(
   };
 }
 
+// Find most likely scoreline
+function findMostLikelyScore(
+  homeExpectedGoals: number,
+  awayExpectedGoals: number
+): { home: number; away: number; prob: number } {
+  let maxProb = 0;
+  let bestHome = 0;
+  let bestAway = 0;
+
+  for (let i = 0; i <= 6; i++) {
+    for (let j = 0; j <= 6; j++) {
+      const prob =
+        poissonProbability(homeExpectedGoals, i) *
+        poissonProbability(awayExpectedGoals, j);
+      if (prob > maxProb) {
+        maxProb = prob;
+        bestHome = i;
+        bestAway = j;
+      }
+    }
+  }
+
+  return { home: bestHome, away: bestAway, prob: maxProb * 100 };
+}
+
 // Calculate Over 2.5 goals probability
 function calculateOver25(
   homeExpectedGoals: number,
   awayExpectedGoals: number
 ): number {
   let under25 = 0;
-  const maxGoals = 5;
+  const maxGoals = 6;
 
   for (let i = 0; i <= maxGoals; i++) {
     for (let j = 0; j <= maxGoals; j++) {
@@ -120,7 +146,6 @@ function calculateBTTS(
   const homeNoGoal = poissonProbability(homeExpectedGoals, 0);
   const awayNoGoal = poissonProbability(awayExpectedGoals, 0);
 
-  // P(both score) = 1 - P(home doesn't score) - P(away doesn't score) + P(neither scores)
   return 1 - homeNoGoal - awayNoGoal + homeNoGoal * awayNoGoal;
 }
 
@@ -132,6 +157,7 @@ export function predictMatch(homeTeam: Team, awayTeam: Team): MatchPrediction {
   const probabilities = calculateProbabilities(homeExpectedGoals, awayExpectedGoals);
   const over25 = calculateOver25(homeExpectedGoals, awayExpectedGoals);
   const btts = calculateBTTS(homeExpectedGoals, awayExpectedGoals);
+  const mostLikely = findMostLikelyScore(homeExpectedGoals, awayExpectedGoals);
 
   // Calculate confidence based on how clear the favorite is
   const maxProb = Math.max(probabilities.homeWin, probabilities.draw, probabilities.awayWin);
@@ -140,14 +166,15 @@ export function predictMatch(homeTeam: Team, awayTeam: Team): MatchPrediction {
   return {
     homeTeam,
     awayTeam,
-    homeGoals: Math.round(homeExpectedGoals * 10) / 10,
-    awayGoals: Math.round(awayExpectedGoals * 10) / 10,
+    homeGoals: Math.round(homeExpectedGoals * 100) / 100,
+    awayGoals: Math.round(awayExpectedGoals * 100) / 100,
     homeWinProb: probabilities.homeWin * 100,
     drawProb: probabilities.draw * 100,
     awayWinProb: probabilities.awayWin * 100,
     over25Prob: over25 * 100,
     bttsProb: btts * 100,
     confidence,
+    mostLikelyScore: mostLikely,
   };
 }
 
@@ -155,7 +182,6 @@ export function predictMatch(homeTeam: Team, awayTeam: Team): MatchPrediction {
 export function simulateMatch(homeTeam: Team, awayTeam: Team): { homeGoals: number; awayGoals: number } {
   const prediction = predictMatch(homeTeam, awayTeam);
   
-  // Use Poisson random generation
   const homeGoals = poissonRandom(prediction.homeGoals);
   const awayGoals = poissonRandom(prediction.awayGoals);
   
@@ -204,7 +230,7 @@ export function simulateSeason(
       standings.set(fixture.awayTeam, standings.get(fixture.awayTeam)! + getPoints(result.awayGoals, result.homeGoals));
     });
 
-    // Sort standings
+    // Sort standings by points then goal difference
     const sorted = [...standings.entries()].sort((a, b) => b[1] - a[1]);
     
     // Title winner

@@ -4,9 +4,9 @@ export interface Team {
   shortName: string;
   color: string;
   textColor: string;
-  attackStrength: number; // goals scored per game relative to league avg
-  defenseStrength: number; // goals conceded per game relative to league avg
-  homeAdvantage: number; // multiplier for home games
+  attackStrength: number;
+  defenseStrength: number;
+  homeAdvantage: number;
   form: number[]; // last 5 results: 3=win, 1=draw, 0=loss
   played: number;
   won: number;
@@ -15,10 +15,24 @@ export interface Team {
   goalsFor: number;
   goalsAgainst: number;
   points: number;
+  homePlayed: number;
+  homeWon: number;
+  homeDrawn: number;
+  homeLost: number;
+  homeGF: number;
+  homeGA: number;
+  awayPlayed: number;
+  awayWon: number;
+  awayDrawn: number;
+  awayLost: number;
+  awayGF: number;
+  awayGA: number;
 }
 
-export const LEAGUE_AVG_GOALS_HOME = 1.58;
-export const LEAGUE_AVG_GOALS_AWAY = 1.22;
+// Calculated from GW1-GW8 data (80 matches)
+export const LEAGUE_AVG_GOALS_HOME = 1.49; // 119 home goals / 80 matches
+export const LEAGUE_AVG_GOALS_AWAY = 1.26; // 101 away goals / 80 matches
+export const LEAGUE_AVG_GOALS = 1.375; // 220 total / 160 team-games
 
 export const teams: Team[] = [
   {
@@ -27,17 +41,14 @@ export const teams: Team[] = [
     shortName: "MCI",
     color: "#6CABDD",
     textColor: "#1C2C5B",
-    attackStrength: 1.65,
-    defenseStrength: 0.55,
-    homeAdvantage: 1.35,
-    form: [3, 3, 1, 3, 3],
-    played: 28,
-    won: 20,
-    drawn: 5,
-    lost: 3,
-    goalsFor: 68,
-    goalsAgainst: 28,
-    points: 65,
+    attackStrength: 1.82,  // 2.5 goals/game / 1.375
+    defenseStrength: 0.82, // 1.125 conceded/game / 1.375
+    homeAdvantage: 1.25,
+    form: [3, 3, 3, 3, 0], // GW4-8: W,W,W,W,L
+    played: 8, won: 7, drawn: 0, lost: 1,
+    goalsFor: 20, goalsAgainst: 9, points: 21,
+    homePlayed: 4, homeWon: 4, homeDrawn: 0, homeLost: 0, homeGF: 11, homeGA: 6,
+    awayPlayed: 4, awayWon: 3, awayDrawn: 0, awayLost: 1, awayGF: 9, awayGA: 3,
   },
   {
     id: "ars",
@@ -45,125 +56,14 @@ export const teams: Team[] = [
     shortName: "ARS",
     color: "#EF0107",
     textColor: "#FFFFFF",
-    attackStrength: 1.55,
-    defenseStrength: 0.58,
-    homeAdvantage: 1.40,
-    form: [3, 3, 3, 1, 3],
-    played: 28,
-    won: 19,
-    drawn: 6,
-    lost: 3,
-    goalsFor: 62,
-    goalsAgainst: 25,
-    points: 63,
-  },
-  {
-    id: "liv",
-    name: "Liverpool",
-    shortName: "LIV",
-    color: "#C8102E",
-    textColor: "#FFFFFF",
-    attackStrength: 1.60,
-    defenseStrength: 0.62,
-    homeAdvantage: 1.45,
-    form: [3, 3, 3, 0, 3],
-    played: 28,
-    won: 20,
-    drawn: 4,
-    lost: 4,
-    goalsFor: 65,
-    goalsAgainst: 32,
-    points: 64,
-  },
-  {
-    id: "avl",
-    name: "Aston Villa",
-    shortName: "AVL",
-    color: "#670E36",
-    textColor: "#95BFE5",
-    attackStrength: 1.35,
-    defenseStrength: 0.78,
+    attackStrength: 1.18,  // 1.625 / 1.375
+    defenseStrength: 0.45, // 0.625 / 1.375
     homeAdvantage: 1.30,
-    form: [3, 1, 3, 3, 0],
-    played: 28,
-    won: 16,
-    drawn: 5,
-    lost: 7,
-    goalsFor: 55,
-    goalsAgainst: 40,
-    points: 53,
-  },
-  {
-    id: "tot",
-    name: "Tottenham Hotspur",
-    shortName: "TOT",
-    color: "#132257",
-    textColor: "#FFFFFF",
-    attackStrength: 1.40,
-    defenseStrength: 0.85,
-    homeAdvantage: 1.25,
-    form: [0, 3, 1, 3, 3],
-    played: 28,
-    won: 15,
-    drawn: 5,
-    lost: 8,
-    goalsFor: 58,
-    goalsAgainst: 45,
-    points: 50,
-  },
-  {
-    id: "che",
-    name: "Chelsea",
-    shortName: "CHE",
-    color: "#034694",
-    textColor: "#FFFFFF",
-    attackStrength: 1.30,
-    defenseStrength: 0.82,
-    homeAdvantage: 1.28,
-    form: [1, 3, 0, 3, 1],
-    played: 28,
-    won: 14,
-    drawn: 6,
-    lost: 8,
-    goalsFor: 52,
-    goalsAgainst: 42,
-    points: 48,
-  },
-  {
-    id: "mun",
-    name: "Manchester United",
-    shortName: "MUN",
-    color: "#DA291C",
-    textColor: "#FBE122",
-    attackStrength: 1.15,
-    defenseStrength: 0.95,
-    homeAdvantage: 1.32,
-    form: [0, 1, 3, 0, 1],
-    played: 28,
-    won: 13,
-    drawn: 4,
-    lost: 11,
-    goalsFor: 42,
-    goalsAgainst: 48,
-    points: 43,
-  },
-  {
-    id: "new",
-    name: "Newcastle United",
-    shortName: "NEW",
-    color: "#241F20",
-    textColor: "#FFFFFF",
-    attackStrength: 1.25,
-    defenseStrength: 0.80,
-    homeAdvantage: 1.38,
-    form: [3, 1, 0, 3, 1],
-    played: 28,
-    won: 13,
-    drawn: 5,
-    lost: 10,
-    goalsFor: 52,
-    goalsAgainst: 42,
-    points: 44,
+    form: [3, 0, 3, 3, 3], // GW4-8: W,L,W,W,W
+    played: 8, won: 7, drawn: 0, lost: 1,
+    goalsFor: 13, goalsAgainst: 5, points: 21,
+    homePlayed: 4, homeWon: 4, homeDrawn: 0, homeLost: 0, homeGF: 9, homeGA: 2,
+    awayPlayed: 4, awayWon: 3, awayDrawn: 0, awayLost: 1, awayGF: 4, awayGA: 3,
   },
   {
     id: "bri",
@@ -171,125 +71,44 @@ export const teams: Team[] = [
     shortName: "BHA",
     color: "#0057B8",
     textColor: "#FFFFFF",
-    attackStrength: 1.20,
-    defenseStrength: 0.88,
-    homeAdvantage: 1.22,
-    form: [1, 0, 3, 1, 3],
-    played: 28,
-    won: 11,
-    drawn: 8,
-    lost: 9,
-    goalsFor: 48,
-    goalsAgainst: 45,
-    points: 41,
-  },
-  {
-    id: "whu",
-    name: "West Ham United",
-    shortName: "WHU",
-    color: "#7A263A",
-    textColor: "#1BB1E7",
-    attackStrength: 1.10,
-    defenseStrength: 0.92,
-    homeAdvantage: 1.25,
-    form: [0, 1, 0, 3, 1],
-    played: 28,
-    won: 11,
-    drawn: 6,
-    lost: 11,
-    goalsFor: 42,
-    goalsAgainst: 50,
-    points: 39,
-  },
-  {
-    id: "bou",
-    name: "AFC Bournemouth",
-    shortName: "BOU",
-    color: "#DA291C",
-    textColor: "#000000",
-    attackStrength: 1.15,
-    defenseStrength: 0.95,
+    attackStrength: 2.09,  // 2.875 / 1.375 - BEST ATTACK
+    defenseStrength: 0.64, // 0.875 / 1.375
     homeAdvantage: 1.20,
-    form: [3, 0, 1, 0, 3],
-    played: 28,
-    won: 11,
-    drawn: 5,
-    lost: 12,
-    goalsFor: 42,
-    goalsAgainst: 52,
-    points: 38,
+    form: [3, 3, 3, 3, 0], // GW4-8: W,W,W,W,L
+    played: 8, won: 6, drawn: 1, lost: 1,
+    goalsFor: 23, goalsAgainst: 7, points: 19,
+    homePlayed: 4, homeWon: 3, homeDrawn: 1, homeLost: 0, homeGF: 13, homeGA: 1,
+    awayPlayed: 4, awayWon: 3, awayDrawn: 0, awayLost: 1, awayGF: 10, awayGA: 6,
   },
   {
-    id: "cry",
-    name: "Crystal Palace",
-    shortName: "CRY",
-    color: "#1B458F",
-    textColor: "#C4122E",
-    attackStrength: 1.05,
-    defenseStrength: 0.95,
+    id: "liv",
+    name: "Liverpool",
+    shortName: "LIV",
+    color: "#C8102E",
+    textColor: "#FFFFFF",
+    attackStrength: 1.0,   // 1.375 / 1.375
+    defenseStrength: 0.73, // 1.0 / 1.375
+    homeAdvantage: 1.30,
+    form: [1, 3, 0, 3, 3], // GW4-8: D,W,L,W,W
+    played: 8, won: 4, drawn: 3, lost: 1,
+    goalsFor: 11, goalsAgainst: 8, points: 15,
+    homePlayed: 4, homeWon: 1, homeDrawn: 2, homeLost: 1, homeGF: 4, homeGA: 5,
+    awayPlayed: 4, awayWon: 3, awayDrawn: 1, awayLost: 0, awayGF: 7, awayGA: 3,
+  },
+  {
+    id: "che",
+    name: "Chelsea",
+    shortName: "CHE",
+    color: "#034694",
+    textColor: "#FFFFFF",
+    attackStrength: 1.55,  // 2.125 / 1.375
+    defenseStrength: 1.36, // 1.875 / 1.375
     homeAdvantage: 1.22,
-    form: [1, 0, 1, 3, 0],
-    played: 28,
-    won: 9,
-    drawn: 7,
-    lost: 12,
-    goalsFor: 38,
-    goalsAgainst: 48,
-    points: 34,
-  },
-  {
-    id: "ful",
-    name: "Fulham",
-    shortName: "FUL",
-    color: "#000000",
-    textColor: "#FFFFFF",
-    attackStrength: 1.08,
-    defenseStrength: 0.98,
-    homeAdvantage: 1.20,
-    form: [1, 3, 0, 1, 0],
-    played: 28,
-    won: 10,
-    drawn: 6,
-    lost: 12,
-    goalsFor: 40,
-    goalsAgainst: 48,
-    points: 36,
-  },
-  {
-    id: "wol",
-    name: "Wolverhampton Wanderers",
-    shortName: "WOL",
-    color: "#FDB913",
-    textColor: "#231F20",
-    attackStrength: 1.00,
-    defenseStrength: 1.02,
-    homeAdvantage: 1.18,
-    form: [0, 0, 1, 3, 0],
-    played: 28,
-    won: 10,
-    drawn: 5,
-    lost: 13,
-    goalsFor: 38,
-    goalsAgainst: 52,
-    points: 35,
-  },
-  {
-    id: "eve",
-    name: "Everton",
-    shortName: "EVE",
-    color: "#003399",
-    textColor: "#FFFFFF",
-    attackStrength: 0.90,
-    defenseStrength: 1.05,
-    homeAdvantage: 1.25,
-    form: [0, 1, 0, 0, 1],
-    played: 28,
-    won: 8,
-    drawn: 7,
-    lost: 13,
-    goalsFor: 32,
-    goalsAgainst: 48,
-    points: 31,
+    form: [1, 0, 3, 3, 0], // GW4-8: D,L,W,W,L
+    played: 8, won: 4, drawn: 1, lost: 3,
+    goalsFor: 17, goalsAgainst: 15, points: 13,
+    homePlayed: 4, homeWon: 2, homeDrawn: 1, homeLost: 1, homeGF: 11, homeGA: 8,
+    awayPlayed: 4, awayWon: 2, awayDrawn: 0, awayLost: 2, awayGF: 6, awayGA: 7,
   },
   {
     id: "bre",
@@ -297,17 +116,179 @@ export const teams: Team[] = [
     shortName: "BRE",
     color: "#E30613",
     textColor: "#FFFFFF",
-    attackStrength: 1.18,
-    defenseStrength: 1.00,
+    attackStrength: 1.27,  // 1.75 / 1.375
+    defenseStrength: 0.82, // 1.125 / 1.375
+    homeAdvantage: 1.28,
+    form: [3, 1, 0, 1, 1], // GW4-8: D,W,D,L,D
+    played: 8, won: 2, drawn: 5, lost: 1,
+    goalsFor: 14, goalsAgainst: 9, points: 11,
+    homePlayed: 4, homeWon: 1, homeDrawn: 2, homeLost: 1, homeGF: 8, homeGA: 4,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 3, awayLost: 0, awayGF: 6, awayGA: 5,
+  },
+  {
+    id: "lee",
+    name: "Leeds United",
+    shortName: "LEE",
+    color: "#FFFFFF",
+    textColor: "#1D428A",
+    attackStrength: 0.82,  // 1.125 / 1.375
+    defenseStrength: 0.55, // 0.75 / 1.375
+    homeAdvantage: 1.25,
+    form: [1, 0, 1, 1, 1], // GW4-8: W,D,L,D,D
+    played: 8, won: 2, drawn: 5, lost: 1,
+    goalsFor: 9, goalsAgainst: 6, points: 11,
+    homePlayed: 4, homeWon: 1, homeDrawn: 3, homeLost: 0, homeGF: 6, homeGA: 3,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 2, awayLost: 1, awayGF: 3, awayGA: 3,
+  },
+  {
+    id: "avl",
+    name: "Aston Villa",
+    shortName: "AVL",
+    color: "#670E36",
+    textColor: "#95BFE5",
+    attackStrength: 0.82,  // 1.125 / 1.375
+    defenseStrength: 1.09, // 1.5 / 1.375
+    homeAdvantage: 1.20,
+    form: [0, 3, 1, 3, 3], // GW4-8: L,W,D,W,W
+    played: 8, won: 3, drawn: 2, lost: 3,
+    goalsFor: 9, goalsAgainst: 12, points: 11,
+    homePlayed: 4, homeWon: 1, homeDrawn: 1, homeLost: 2, homeGF: 3, homeGA: 5,
+    awayPlayed: 4, awayWon: 2, awayDrawn: 1, awayLost: 1, awayGF: 6, awayGA: 7,
+  },
+  {
+    id: "new",
+    name: "Newcastle United",
+    shortName: "NEW",
+    color: "#241F20",
+    textColor: "#FFFFFF",
+    attackStrength: 1.09,  // 1.5 / 1.375
+    defenseStrength: 1.27, // 1.75 / 1.375
+    homeAdvantage: 1.25,
+    form: [0, 3, 0, 0, 3], // GW4-8: L,W,L,L,W
+    played: 8, won: 3, drawn: 2, lost: 3,
+    goalsFor: 12, goalsAgainst: 14, points: 11,
+    homePlayed: 4, homeWon: 2, homeDrawn: 1, homeLost: 1, homeGF: 6, homeGA: 4,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 1, awayLost: 2, awayGF: 6, awayGA: 10,
+  },
+  {
+    id: "hul",
+    name: "Hull City",
+    shortName: "HUL",
+    color: "#F0AB00",
+    textColor: "#000000",
+    attackStrength: 0.82,  // 1.125 / 1.375
+    defenseStrength: 0.73, // 1.0 / 1.375
+    homeAdvantage: 1.18,
+    form: [0, 1, 0, 1, 1], // GW4-8: D,L,D,L,D
+    played: 8, won: 2, drawn: 4, lost: 2,
+    goalsFor: 9, goalsAgainst: 8, points: 10,
+    homePlayed: 4, homeWon: 1, homeDrawn: 2, homeLost: 1, homeGF: 5, homeGA: 4,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 2, awayLost: 1, awayGF: 4, awayGA: 4,
+  },
+  {
+    id: "eve",
+    name: "Everton",
+    shortName: "EVE",
+    color: "#003399",
+    textColor: "#FFFFFF",
+    attackStrength: 0.73,  // 1.0 / 1.375
+    defenseStrength: 0.82, // 1.125 / 1.375
     homeAdvantage: 1.22,
-    form: [3, 0, 1, 0, 3],
-    played: 28,
-    won: 10,
-    drawn: 5,
-    lost: 13,
-    goalsFor: 44,
-    goalsAgainst: 50,
-    points: 35,
+    form: [1, 3, 1, 0, 0], // GW4-8: D,W,D,L,L
+    played: 8, won: 2, drawn: 4, lost: 2,
+    goalsFor: 8, goalsAgainst: 9, points: 10,
+    homePlayed: 4, homeWon: 2, homeDrawn: 1, homeLost: 1, homeGF: 5, homeGA: 2,
+    awayPlayed: 4, awayWon: 0, awayDrawn: 3, awayLost: 1, awayGF: 3, awayGA: 7,
+  },
+  {
+    id: "ips",
+    name: "Ipswich Town",
+    shortName: "IPS",
+    color: "#3A64A3",
+    textColor: "#FFFFFF",
+    attackStrength: 1.09,  // 1.5 / 1.375
+    defenseStrength: 1.45, // 2.0 / 1.375
+    homeAdvantage: 1.15,
+    form: [3, 0, 3, 0, 1], // GW4-8: W,L,W,L,D
+    played: 8, won: 3, drawn: 1, lost: 4,
+    goalsFor: 12, goalsAgainst: 16, points: 10,
+    homePlayed: 4, homeWon: 2, homeDrawn: 1, homeLost: 1, homeGF: 5, homeGA: 5,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 0, awayLost: 3, awayGF: 7, awayGA: 11,
+  },
+  {
+    id: "bou",
+    name: "AFC Bournemouth",
+    shortName: "BOU",
+    color: "#DA291C",
+    textColor: "#000000",
+    attackStrength: 1.09,  // 1.5 / 1.375
+    defenseStrength: 1.18, // 1.625 / 1.375
+    homeAdvantage: 1.18,
+    form: [1, 0, 0, 3, 3], // GW4-8: D,L,L,W,W
+    played: 8, won: 2, drawn: 3, lost: 3,
+    goalsFor: 12, goalsAgainst: 13, points: 9,
+    homePlayed: 4, homeWon: 1, homeDrawn: 2, homeLost: 1, homeGF: 6, homeGA: 6,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 1, awayLost: 2, awayGF: 6, awayGA: 7,
+  },
+  {
+    id: "tot",
+    name: "Tottenham Hotspur",
+    shortName: "TOT",
+    color: "#132257",
+    textColor: "#FFFFFF",
+    attackStrength: 0.73,  // 1.0 / 1.375
+    defenseStrength: 0.91, // 1.25 / 1.375
+    homeAdvantage: 1.20,
+    form: [1, 0, 1, 3, 3], // GW4-8: D,L,D,W,W
+    played: 8, won: 2, drawn: 3, lost: 3,
+    goalsFor: 8, goalsAgainst: 10, points: 9,
+    homePlayed: 4, homeWon: 1, homeDrawn: 2, homeLost: 1, homeGF: 5, homeGA: 6,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 1, awayLost: 2, awayGF: 3, awayGA: 4,
+  },
+  {
+    id: "ful",
+    name: "Fulham",
+    shortName: "FUL",
+    color: "#000000",
+    textColor: "#FFFFFF",
+    attackStrength: 0.73,  // 1.0 / 1.375
+    defenseStrength: 0.91, // 1.25 / 1.375
+    homeAdvantage: 1.20,
+    form: [1, 1, 0, 3, 3], // GW4-8: D,D,L,W,W
+    played: 8, won: 2, drawn: 2, lost: 4,
+    goalsFor: 8, goalsAgainst: 10, points: 8,
+    homePlayed: 4, homeWon: 1, homeDrawn: 1, homeLost: 2, homeGF: 4, homeGA: 6,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 1, awayLost: 2, awayGF: 4, awayGA: 4,
+  },
+  {
+    id: "mun",
+    name: "Manchester United",
+    shortName: "MUN",
+    color: "#DA291C",
+    textColor: "#FBE122",
+    attackStrength: 0.91,  // 1.25 / 1.375
+    defenseStrength: 1.18, // 1.625 / 1.375
+    homeAdvantage: 1.18,
+    form: [1, 1, 1, 0, 0], // GW4-8: D,D,D,L,L
+    played: 8, won: 1, drawn: 4, lost: 3,
+    goalsFor: 10, goalsAgainst: 13, points: 7,
+    homePlayed: 4, homeWon: 1, homeDrawn: 1, homeLost: 2, homeGF: 6, homeGA: 7,
+    awayPlayed: 4, awayWon: 0, awayDrawn: 3, awayLost: 1, awayGF: 4, awayGA: 6,
+  },
+  {
+    id: "cry",
+    name: "Crystal Palace",
+    shortName: "CRY",
+    color: "#1B458F",
+    textColor: "#C4122E",
+    attackStrength: 0.82,  // 1.125 / 1.375
+    defenseStrength: 1.73, // 2.375 / 1.375 - WORST DEFENSE
+    homeAdvantage: 1.15,
+    form: [1, 3, 0, 0, 0], // GW4-8: D,W,L,L,L
+    played: 8, won: 2, drawn: 1, lost: 5,
+    goalsFor: 9, goalsAgainst: 19, points: 7,
+    homePlayed: 4, homeWon: 1, homeDrawn: 0, homeLost: 3, homeGF: 6, homeGA: 10,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 1, awayLost: 2, awayGF: 3, awayGA: 9,
   },
   {
     id: "nfo",
@@ -315,73 +296,48 @@ export const teams: Team[] = [
     shortName: "NFO",
     color: "#DD0000",
     textColor: "#FFFFFF",
-    attackStrength: 0.95,
-    defenseStrength: 1.00,
-    homeAdvantage: 1.20,
-    form: [1, 0, 3, 1, 0],
-    played: 28,
-    won: 8,
-    drawn: 6,
-    lost: 14,
-    goalsFor: 35,
-    goalsAgainst: 50,
-    points: 30,
-  },
-  {
-    id: "lut",
-    name: "Luton Town",
-    shortName: "LUT",
-    color: "#F78F1E",
-    textColor: "#002D62",
-    attackStrength: 0.88,
-    defenseStrength: 1.15,
-    homeAdvantage: 1.15,
-    form: [0, 0, 1, 0, 3],
-    played: 28,
-    won: 5,
-    drawn: 6,
-    lost: 17,
-    goalsFor: 32,
-    goalsAgainst: 58,
-    points: 21,
-  },
-  {
-    id: "bur",
-    name: "Burnley",
-    shortName: "BUR",
-    color: "#6C1D45",
-    textColor: "#99D6EA",
-    attackStrength: 0.78,
-    defenseStrength: 1.25,
-    homeAdvantage: 1.15,
-    form: [0, 0, 0, 1, 0],
-    played: 28,
-    won: 4,
-    drawn: 5,
-    lost: 19,
-    goalsFor: 28,
-    goalsAgainst: 62,
-    points: 17,
-  },
-  {
-    id: "shu",
-    name: "Sheffield United",
-    shortName: "SHU",
-    color: "#EE2737",
-    textColor: "#000000",
-    attackStrength: 0.70,
-    defenseStrength: 1.40,
+    attackStrength: 0.55,  // 0.75 / 1.375
+    defenseStrength: 0.91, // 1.25 / 1.375
     homeAdvantage: 1.10,
-    form: [0, 0, 0, 0, 1],
-    played: 28,
-    won: 3,
-    drawn: 5,
-    lost: 20,
-    goalsFor: 22,
-    goalsAgainst: 72,
-    points: 14,
+    form: [3, 0, 0, 0, 1], // GW4-8: W,L,L,L,D
+    played: 8, won: 1, drawn: 3, lost: 4,
+    goalsFor: 6, goalsAgainst: 10, points: 6,
+    homePlayed: 4, homeWon: 0, homeDrawn: 1, homeLost: 3, homeGF: 0, homeGA: 4,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 2, awayLost: 1, awayGF: 6, awayGA: 6,
+  },
+  {
+    id: "cov",
+    name: "Coventry City",
+    shortName: "COV",
+    color: "#123456",
+    textColor: "#FFFFFF",
+    attackStrength: 0.55,  // 0.75 / 1.375
+    defenseStrength: 1.36, // 1.875 / 1.375
+    homeAdvantage: 1.12,
+    form: [0, 3, 3, 0, 0], // GW4-8: L,W,W,L,L
+    played: 8, won: 2, drawn: 0, lost: 6,
+    goalsFor: 6, goalsAgainst: 15, points: 6,
+    homePlayed: 4, homeWon: 1, homeDrawn: 0, homeLost: 3, homeGF: 4, homeGA: 8,
+    awayPlayed: 4, awayWon: 1, awayDrawn: 0, awayLost: 3, awayGF: 2, awayGA: 7,
+  },
+  {
+    id: "sun",
+    name: "Sunderland",
+    shortName: "SUN",
+    color: "#FF0000",
+    textColor: "#FFFFFF",
+    attackStrength: 0.55,  // 0.75 / 1.375
+    defenseStrength: 1.27, // 1.75 / 1.375
+    homeAdvantage: 1.10,
+    form: [0, 0, 0, 0, 1], // GW4-8: L,L,L,L,D
+    played: 8, won: 1, drawn: 2, lost: 5,
+    goalsFor: 6, goalsAgainst: 14, points: 5,
+    homePlayed: 4, homeWon: 1, homeDrawn: 1, homeLost: 2, homeGF: 1, homeGA: 4,
+    awayPlayed: 4, awayWon: 0, awayDrawn: 1, awayLost: 3, awayGF: 5, awayGA: 10,
   },
 ];
+
+
 
 export interface Fixture {
   homeTeam: string;
@@ -389,15 +345,16 @@ export interface Fixture {
   week: number;
 }
 
+// Gameweek 9 fixtures (projected matchups)
 export const upcomingFixtures: Fixture[] = [
-  { homeTeam: "mci", awayTeam: "ars", week: 29 },
-  { homeTeam: "liv", awayTeam: "tot", week: 29 },
-  { homeTeam: "che", awayTeam: "mun", week: 29 },
-  { homeTeam: "new", awayTeam: "avl", week: 29 },
-  { homeTeam: "bri", awayTeam: "whu", week: 29 },
-  { homeTeam: "cry", awayTeam: "ful", week: 29 },
-  { homeTeam: "wol", awayTeam: "bou", week: 29 },
-  { homeTeam: "eve", awayTeam: "bre", week: 29 },
-  { homeTeam: "nfo", awayTeam: "lut", week: 29 },
-  { homeTeam: "shu", awayTeam: "bur", week: 29 },
+  { homeTeam: "liv", awayTeam: "mci", week: 9 },
+  { homeTeam: "bri", awayTeam: "ars", week: 9 },
+  { homeTeam: "che", awayTeam: "new", week: 9 },
+  { homeTeam: "lee", awayTeam: "bre", week: 9 },
+  { homeTeam: "avl", awayTeam: "tot", week: 9 },
+  { homeTeam: "eve", awayTeam: "bou", week: 9 },
+  { homeTeam: "ips", awayTeam: "hul", week: 9 },
+  { homeTeam: "mun", awayTeam: "cry", week: 9 },
+  { homeTeam: "ful", awayTeam: "nfo", week: 9 },
+  { homeTeam: "sun", awayTeam: "cov", week: 9 },
 ];
