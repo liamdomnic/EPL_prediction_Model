@@ -2,18 +2,10 @@ import { useState, useEffect } from "react";
 import { teams, upcomingFixtures, Team } from "./data/teams";
 import { predictMatch, simulateSeason, MatchPrediction } from "./utils/predictionEngine";
 import {
-  FPLLeaderboard,
-  TopScorers,
-  TopAssisters,
-  ValuePicks,
-  DifferentialPicks,
-  InFormPlayers,
-  GWPointsBreakdown,
-  FPLTeamBuilder,
-  FPLStatsOverview,
-  PlayerDetailCard,
-  FPLScoringRules,
-} from "./components/FantasyComponents";
+  MatchPredictorFPL,
+  TeamComparison,
+  TopPerformersByTeam,
+} from "./components/MatchPredictorFPL";
 
 // GW8 Results
 const gw8Results = [
@@ -843,25 +835,11 @@ function PredictionsTab() {
 function FPLTab() {
   return (
     <>
-      <FPLStatsOverview />
+      <MatchPredictorFPL />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <FPLTeamBuilder />
-        <PlayerDetailCard />
+        <TeamComparison />
+        <TopPerformersByTeam />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <TopScorers />
-        <TopAssisters />
-      </div>
-      <FPLLeaderboard />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <GWPointsBreakdown />
-        <InFormPlayers />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <ValuePicks />
-        <DifferentialPicks />
-      </div>
-      <FPLScoringRules />
     </>
   );
 }
