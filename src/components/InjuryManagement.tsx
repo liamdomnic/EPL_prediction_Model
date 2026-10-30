@@ -51,10 +51,10 @@ export function InjuryManagement() {
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
+    <div className="bg-white rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
             <span className="text-3xl">🏥</span>
             Injury Management
           </h2>
@@ -64,7 +64,7 @@ export function InjuryManagement() {
         </div>
         <button
           onClick={() => setShowAddForm(!showAddForm)}
-          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+          className="px-5 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium shadow-md"
         >
           {showAddForm ? '✕ Cancel' : '+ Add Injury'}
         </button>
@@ -72,18 +72,18 @@ export function InjuryManagement() {
 
       {/* Add Injury Form */}
       {showAddForm && (
-        <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-lg">
-          <h3 className="font-semibold text-gray-800 mb-4">Add New Injury</h3>
+        <div className="mb-6 p-5 bg-red-50 border-2 border-red-200 rounded-lg">
+          <h3 className="font-semibold text-gray-800 mb-4 text-lg">Add New Injury</h3>
           
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Player *
               </label>
               <select
                 value={selectedPlayer}
                 onChange={(e) => setSelectedPlayer(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
               >
                 <option value="">Select a player...</option>
                 {availablePlayers.map(player => (
@@ -96,7 +96,7 @@ export function InjuryManagement() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Injury Type
                 </label>
                 <input
@@ -104,25 +104,25 @@ export function InjuryManagement() {
                   value={injuryType}
                   onChange={(e) => setInjuryType(e.target.value)}
                   placeholder="e.g., Hamstring, Knee, Ankle"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Expected Return
                 </label>
                 <input
                   type="date"
                   value={expectedReturn}
                   onChange={(e) => setExpectedReturn(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Notes
               </label>
               <textarea
@@ -130,14 +130,14 @@ export function InjuryManagement() {
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Additional information about the injury..."
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
             </div>
 
             <button
               onClick={handleAddInjury}
               disabled={!selectedPlayer}
-              className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="w-full px-5 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md"
             >
               Add Injury
             </button>
@@ -154,8 +154,8 @@ export function InjuryManagement() {
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-gray-800">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-800 text-lg">
               Currently Injured ({injuredPlayers.length})
             </h3>
             <span className="text-sm text-gray-500">
@@ -170,20 +170,20 @@ export function InjuryManagement() {
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center gap-3 mb-3">
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md"
                       style={{ backgroundColor: getTeamColor(player.teamId) }}
                     >
                       {player.position}
                     </div>
                     <div>
-                      <h4 className="font-bold text-gray-800">{player.playerName}</h4>
+                      <h4 className="font-bold text-gray-800 text-lg">{player.playerName}</h4>
                       <p className="text-sm text-gray-600">{getTeamName(player.teamId)}</p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 text-sm">
                     <div>
                       <span className="text-gray-500">Injury Date:</span>
                       <span className="ml-2 font-medium text-gray-700">
@@ -209,7 +209,7 @@ export function InjuryManagement() {
                   </div>
 
                   {player.notes && (
-                    <p className="text-sm text-gray-600 mt-2 italic">
+                    <p className="text-sm text-gray-600 mt-3 italic bg-white/50 p-2 rounded">
                       {player.notes}
                     </p>
                   )}
@@ -217,10 +217,10 @@ export function InjuryManagement() {
 
                 <button
                   onClick={() => removeInjury(player.playerId)}
-                  className="ml-4 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center gap-2"
+                  className="ml-4 px-5 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center gap-2 shadow-md"
                   title="Mark as fit"
                 >
-                  <span>✓</span>
+                  <span className="text-lg">✓</span>
                   <span className="hidden md:inline">Fit</span>
                 </button>
               </div>
@@ -232,9 +232,9 @@ export function InjuryManagement() {
       {/* Info Box */}
       <div className="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
         <div className="flex items-start gap-3">
-          <span className="text-2xl">ℹ️</span>
+          <span className="text-3xl">ℹ️</span>
           <div className="text-sm text-blue-900">
-            <p className="font-semibold mb-1">How it works:</p>
+            <p className="font-semibold mb-2 text-base">How it works:</p>
             <ul className="list-disc list-inside space-y-1 text-xs">
               <li>Injured players are automatically excluded from Top 20 picks</li>
               <li>They won't appear in Best XI squad recommendations</li>
