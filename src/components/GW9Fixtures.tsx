@@ -3,13 +3,16 @@ import { upcomingFixtures } from '../data/teams';
 import { rankPlayersForMatch } from '../data/fplDatabase';
 import { teams } from '../data/teams';
 import { BestSquadDisplay } from './BestSquadDisplay';
+import { useInjuries } from '../context/InjuryContext';
 
 export function GW9Fixtures() {
   const [selectedFixture, setSelectedFixture] = useState<number | null>(null);
+  const { injuredPlayers } = useInjuries();
+  const injuredPlayerIds = injuredPlayers.map(p => p.playerId);
 
-  // Get all players from all GW9 fixtures and rank them
+  // Get all players from all GW9 fixtures and rank them (excluding injured players)
   const allGW9Players = upcomingFixtures.flatMap(fixture => {
-    const ranked = rankPlayersForMatch(fixture.homeTeam, fixture.awayTeam);
+    const ranked = rankPlayersForMatch(fixture.homeTeam, fixture.awayTeam, injuredPlayerIds);
     return ranked.map(r => ({
       ...r,
       fixture: `${teams.find(t => t.id === fixture.homeTeam)?.shortName} vs ${teams.find(t => t.id === fixture.awayTeam)?.shortName}`

@@ -789,10 +789,11 @@ export function predictPlayerPerformance(
 // Rank players from two teams for a match
 export function rankPlayersForMatch(
   homeTeamId: string,
-  awayTeamId: string
+  awayTeamId: string,
+  injuredPlayerIds: string[] = []
 ): { player: FPLPlayer; prediction: ReturnType<typeof predictPlayerPerformance>; isHome: boolean }[] {
-  const homePlayers = getPlayersByTeam(homeTeamId).filter(p => p.points > 0);
-  const awayPlayers = getPlayersByTeam(awayTeamId).filter(p => p.points > 0);
+  const homePlayers = getPlayersByTeam(homeTeamId).filter(p => p.points > 0 && !injuredPlayerIds.includes(p.id));
+  const awayPlayers = getPlayersByTeam(awayTeamId).filter(p => p.points > 0 && !injuredPlayerIds.includes(p.id));
   
   const ranked: { player: FPLPlayer; prediction: ReturnType<typeof predictPlayerPerformance>; isHome: boolean }[] = [];
   

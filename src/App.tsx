@@ -7,6 +7,8 @@ import {
   TopPerformersByTeam,
 } from "./components/MatchPredictorFPL";
 import { GW9Fixtures } from "./components/GW9Fixtures";
+import { InjuryProvider } from "./context/InjuryContext";
+import { InjuryManagement } from "./components/InjuryManagement";
 
 // GW8 Results
 const gw8Results = [
@@ -747,8 +749,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("predictions");
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Header />
+    <InjuryProvider>
+      <div className="min-h-screen bg-gray-100">
+        <Header />
       {/* Tab Navigation */}
       <div className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4">
@@ -793,6 +796,7 @@ export default function App() {
         </p>
       </footer>
     </div>
+    </InjuryProvider>
   );
 }
 
@@ -841,6 +845,8 @@ function PredictionsTab() {
 function FPLTab() {
   return (
     <>
+      <InjuryManagement />
+      <GW9Fixtures />
       <MatchPredictorFPL />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <TeamComparison />

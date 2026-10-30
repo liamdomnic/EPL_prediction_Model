@@ -1,8 +1,11 @@
 import { calculateBestSquad } from '../utils/squadOptimizer';
 import { teams } from '../data/teams';
+import { useInjuries } from '../context/InjuryContext';
 
 export function BestSquadDisplay() {
-  const squad = calculateBestSquad();
+  const { injuredPlayers } = useInjuries();
+  const injuredPlayerIds = injuredPlayers.map(p => p.playerId);
+  const squad = calculateBestSquad(injuredPlayerIds);
 
   const getTeamBadge = (teamId: string) => {
     const team = teams.find(t => t.id === teamId);

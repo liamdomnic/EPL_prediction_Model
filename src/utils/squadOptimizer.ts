@@ -53,9 +53,9 @@ const BUDGET = 100.0; // £100m
 const MAX_PER_TEAM = 3;
 
 // Get all players from GW9 fixtures
-function getAllGW9Players(): RankedPlayer[] {
+function getAllGW9Players(injuredPlayerIds: string[] = []): RankedPlayer[] {
   return upcomingFixtures.flatMap(fixture => {
-    const ranked = rankPlayersForMatch(fixture.homeTeam, fixture.awayTeam);
+    const ranked = rankPlayersForMatch(fixture.homeTeam, fixture.awayTeam, injuredPlayerIds);
     return ranked.map(r => ({
       ...r,
       fixture: `${teams.find(t => t.id === fixture.homeTeam)?.shortName} vs ${teams.find(t => t.id === fixture.awayTeam)?.shortName}`
@@ -234,8 +234,8 @@ function tryBuildSquad(
   };
 }
 
-export function calculateBestSquad(): BestSquadResult {
-  const allPlayers = getAllGW9Players();
+export function calculateBestSquad(injuredPlayerIds: string[] = []): BestSquadResult {
+  const allPlayers = getAllGW9Players(injuredPlayerIds);
   
   // Group by position
   const gks = allPlayers.filter(p => p.player.position === "GK");
