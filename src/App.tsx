@@ -1,6 +1,17 @@
 import { useState, useEffect } from "react";
 import { teams, upcomingFixtures, Team } from "./data/teams";
 import { predictMatch, simulateSeason, MatchPrediction } from "./utils/predictionEngine";
+import {
+  FPLLeaderboard,
+  TopScorers,
+  TopAssisters,
+  ValuePicks,
+  DifferentialPicks,
+  InFormPlayers,
+  GWPointsBreakdown,
+  FPLTeamBuilder,
+  FPLStatsOverview,
+} from "./components/FantasyComponents";
 
 // GW8 Results
 const gw8Results = [
@@ -735,53 +746,116 @@ function TopPerformers() {
   );
 }
 
+type Tab = "predictions" | "fpl";
+
 export default function App() {
+  const [activeTab, setActiveTab] = useState<Tab>("predictions");
+
   return (
     <div className="min-h-screen bg-gray-100">
       <Header />
+      {/* Tab Navigation */}
+      <div className="bg-white shadow-sm border-b sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setActiveTab("predictions")}
+              className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${
+                activeTab === "predictions"
+                  ? "border-indigo-600 text-indigo-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              ⚽ Match Predictions
+            </button>
+            <button
+              onClick={() => setActiveTab("fpl")}
+              className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${
+                activeTab === "fpl"
+                  ? "border-indigo-600 text-indigo-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              🏆 Fantasy Premier League
+            </button>
+          </div>
+        </div>
+      </div>
+
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        {/* Stats Overview */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl p-4 shadow text-center">
-            <p className="text-3xl font-bold text-indigo-600">220</p>
-            <p className="text-xs text-gray-500">Goals Scored (GW1-8)</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow text-center">
-            <p className="text-3xl font-bold text-green-600">2.75</p>
-            <p className="text-xs text-gray-500">Avg Goals/Match</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow text-center">
-            <p className="text-3xl font-bold text-purple-600">80</p>
-            <p className="text-xs text-gray-500">Matches Played</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow text-center">
-            <p className="text-3xl font-bold text-orange-600">20</p>
-            <p className="text-xs text-gray-500">Teams Competing</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <MatchPredictor />
-          <TeamAnalytics />
-        </div>
-
-        <FixturesList />
-        <GW8Results />
-
-        <SeasonProjections />
-        <TopPerformers />
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <LeagueTable />
-          <ModelInfo />
-        </div>
+        {activeTab === "predictions" && <PredictionsTab />}
+        {activeTab === "fpl" && <FPLTab />}
       </main>
       <footer className="bg-gray-900 text-gray-400 text-center py-6 text-sm">
-        <p>EPL Prediction Model 2026/27 • Poisson Distribution Engine • Based on GW1-GW8 data</p>
+        <p>EPL Prediction Model 2026/27 • Poisson Distribution Engine • FPL Stats • Based on GW1-GW8 data</p>
         <p className="text-gray-500 mt-1">
           Predictions are statistical estimates. Not financial/gambling advice.
         </p>
       </footer>
     </div>
+  );
+}
+
+function PredictionsTab() {
+  return (
+    <>
+      {/* Stats Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-4 shadow text-center">
+          <p className="text-3xl font-bold text-indigo-600">220</p>
+          <p className="text-xs text-gray-500">Goals Scored (GW1-8)</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow text-center">
+          <p className="text-3xl font-bold text-green-600">2.75</p>
+          <p className="text-xs text-gray-500">Avg Goals/Match</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow text-center">
+          <p className="text-3xl font-bold text-purple-600">80</p>
+          <p className="text-xs text-gray-500">Matches Played</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow text-center">
+          <p className="text-3xl font-bold text-orange-600">20</p>
+          <p className="text-xs text-gray-500">Teams Competing</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <MatchPredictor />
+        <TeamAnalytics />
+      </div>
+
+      <FixturesList />
+      <GW8Results />
+
+      <SeasonProjections />
+      <TopPerformers />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <LeagueTable />
+        <ModelInfo />
+      </div>
+    </>
+  );
+}
+
+function FPLTab() {
+  return (
+    <>
+      <FPLStatsOverview />
+      <FPLTeamBuilder />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <TopScorers />
+        <TopAssisters />
+      </div>
+      <FPLLeaderboard />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <ValuePicks />
+        <DifferentialPicks />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <InFormPlayers />
+        <GWPointsBreakdown />
+      </div>
+    </>
   );
 }
