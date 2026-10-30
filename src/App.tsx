@@ -778,13 +778,13 @@ export default function App() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        {activeTab === "predictions" && (
+        {activeTab === "predictions" && <PredictionsTab />}
+        {activeTab === "fpl" && (
           <>
             <GW9Fixtures />
-            <PredictionsTab />
+            <FPLTab />
           </>
         )}
-        {activeTab === "fpl" && <FPLTab />}
       </main>
       <footer className="bg-gray-900 text-gray-400 text-center py-6 text-sm">
         <p>EPL Prediction Model 2026/27 • Poisson Distribution Engine • FPL Stats • Based on GW1-GW8 data</p>
