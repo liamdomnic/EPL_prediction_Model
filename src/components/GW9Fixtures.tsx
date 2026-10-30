@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { upcomingFixtures } from '../data/teams';
-import { rankPlayersForMatch } from '../data/fplDatabase';
+import { getFixturePredictions } from '../utils/componentPredictionEngine';
+import { fplPlayers } from '../data/fplDatabase';
 import { teams } from '../data/teams';
 import { BestSquadDisplay } from './BestSquadDisplay';
 import { useInjuries } from '../context/InjuryContext';
@@ -12,16 +13,25 @@ export function GW9Fixtures() {
 
   // Get all players from all GW9 fixtures and rank them (excluding injured players)
   const allGW9Players = upcomingFixtures.flatMap(fixture => {
-    const ranked = rankPlayersForMatch(fixture.homeTeam, fixture.awayTeam, injuredPlayerIds);
-    return ranked.map(r => ({
-      ...r,
-      fixture: `${teams.find(t => t.id === fixture.homeTeam)?.shortName} vs ${teams.find(t => t.id === fixture.awayTeam)?.shortName}`
-    }));
+    const predictions = getFixturePredictions(fixture.homeTeam, fixture.awayTeam, injuredPlayerIds);
+    
+    return predictions.map(prediction => {
+      const player = fplPlayers.find(p => p.id === prediction.playerId);
+      if (!player) return null;
+      
+      const isHome = player.teamId === fixture.homeTeam;
+      return {
+        player,
+        prediction,
+        isHome,
+        fixture: `${teams.find(t => t.id === fixture.homeTeam)?.shortName} vs ${teams.find(t => t.id === fixture.awayTeam)?.shortName}`
+      };
+    }).filter((p): p is NonNullable<typeof p> => p !== null);
   });
 
   // Sort by predicted points and get top 20
   const top20Players = allGW9Players
-    .sort((a, b) => b.prediction.predictedPoints - a.prediction.predictedPoints)
+    .sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints)
     .slice(0, 20);
 
   return (
@@ -82,7 +92,7 @@ export function GW9Fixtures() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xl font-bold">{player.prediction.predictedPoints}</div>
+                    <div className="text-xl font-bold">{player.prediction.expectedPoints}</div>
                     <div className="text-xs text-purple-200">pts</div>
                   </div>
                 </div>
@@ -92,11 +102,11 @@ export function GW9Fixtures() {
                   <div className="flex gap-2">
                     {player.player.position === 'FWD' || player.player.position === 'MID' ? (
                       <>
-                        <span className="text-green-300">⚽{player.prediction.goalProb}%</span>
-                        <span className="text-blue-300">🎯{player.prediction.assistProb}%</span>
+                        <span className="text-green-300">⚽{player.prediction.expectedGoals.toFixed(2)}</span>
+                        <span className="text-blue-300">🎯{player.prediction.expectedAssists.toFixed(2)}</span>
                       </>
                     ) : (
-                      <span className="text-purple-300">🧤{player.prediction.cleanSheetProb}%</span>
+                      <span className="text-purple-300">🧤{Math.round(player.prediction.expectedCleanSheet * 100)}%</span>
                     )}
                   </div>
                 </div>
@@ -124,7 +134,18 @@ export function GW9Fixtures() {
           {upcomingFixtures.map((fixture, idx) => {
             const homeTeam = teams.find(t => t.id === fixture.homeTeam);
             const awayTeam = teams.find(t => t.id === fixture.awayTeam);
-            const ranked = rankPlayersForMatch(fixture.homeTeam, fixture.awayTeam);
+            const predictions = getFixturePredictions(fixture.homeTeam, fixture.awayTeam, injuredPlayerIds);
+            const ranked = predictions.map(prediction => {
+              const player = fplPlayers.find(p => p.id === prediction.playerId);
+              if (!player) return null;
+              const isHome = player.teamId === fixture.homeTeam;
+              return {
+                player,
+                prediction,
+                isHome,
+                fixture: `${homeTeam?.shortName} vs ${awayTeam?.shortName}`
+              };
+            }).filter((p): p is NonNullable<typeof p> => p !== null);
             const topPlayer = ranked[0];
             
             return (
@@ -170,7 +191,7 @@ export function GW9Fixtures() {
                     <div className="text-right">
                       <div className="text-xs text-gray-500">Top Pick</div>
                       <div className="font-bold text-sm text-green-600">
-                        {topPlayer.player.name} ({topPlayer.prediction.predictedPoints}pts)
+                        {topPlayer.player.name} ({topPlayer.prediction.expectedPoints}pts)
                       </div>
                     </div>
                   )}
@@ -204,7 +225,7 @@ export function GW9Fixtures() {
                           </div>
                           <div className="text-right">
                             <div className="font-bold text-sm text-green-600">
-                              {player.prediction.predictedPoints}
+                              {player.prediction.expectedPoints}
                             </div>
                             <div className="text-xs text-gray-500">pts</div>
                           </div>

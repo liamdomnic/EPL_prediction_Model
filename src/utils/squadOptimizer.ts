@@ -1,5 +1,6 @@
 import { upcomingFixtures, teams } from '../data/teams';
-import { rankPlayersForMatch, type FPLPlayer } from '../data/fplDatabase';
+import { fplPlayers, type FPLPlayer } from '../data/fplDatabase';
+import { getFixturePredictions, type PlayerPrediction } from './componentPredictionEngine';
 
 interface Formation {
   name: string;
@@ -22,15 +23,7 @@ const FORMATIONS: Formation[] = [
 
 export interface RankedPlayer {
   player: FPLPlayer;
-  prediction: {
-    predictedPoints: number;
-    confidence: number;
-    matchDifficulty: number;
-    factors: { label: string; impact: string; value: number; weight: number }[];
-    goalProb: number;
-    assistProb: number;
-    cleanSheetProb: number;
-  };
+  prediction: PlayerPrediction;
   isHome: boolean;
   fixture: string;
 }
@@ -52,14 +45,23 @@ export interface BestSquadResult {
 const BUDGET = 100.0; // £100m
 const MAX_PER_TEAM = 3;
 
-// Get all players from GW9 fixtures
+// Get all players from GW9 fixtures with component-based predictions
 function getAllGW9Players(injuredPlayerIds: string[] = []): RankedPlayer[] {
   return upcomingFixtures.flatMap(fixture => {
-    const ranked = rankPlayersForMatch(fixture.homeTeam, fixture.awayTeam, injuredPlayerIds);
-    return ranked.map(r => ({
-      ...r,
-      fixture: `${teams.find(t => t.id === fixture.homeTeam)?.shortName} vs ${teams.find(t => t.id === fixture.awayTeam)?.shortName}`
-    }));
+    const predictions = getFixturePredictions(fixture.homeTeam, fixture.awayTeam, injuredPlayerIds);
+    
+    return predictions.map(prediction => {
+      const player = fplPlayers.find(p => p.id === prediction.playerId);
+      if (!player) return null;
+      
+      const isHome = player.teamId === fixture.homeTeam;
+      return {
+        player,
+        prediction,
+        isHome,
+        fixture: `${teams.find(t => t.id === fixture.homeTeam)?.shortName} vs ${teams.find(t => t.id === fixture.awayTeam)?.shortName}`
+      };
+    }).filter((r): r is RankedPlayer => r !== null);
   });
 }
 
@@ -75,7 +77,7 @@ function canAddPlayer(
 
 // Calculate squad value score (points per £m)
 function getValueScore(player: RankedPlayer): number {
-  return player.prediction.predictedPoints / player.player.price;
+  return player.prediction.expectedPoints / player.player.price;
 }
 
 // Smart selection: tries to maximize points while respecting constraints
@@ -94,7 +96,7 @@ function selectBestForPosition(
   // This prevents picking 3 expensive players that blow the budget
   const scored = candidates.map(p => ({
     player: p,
-    compositeScore: (p.prediction.predictedPoints * 0.7) + (getValueScore(p) * 10 * 0.3)
+    compositeScore: (p.prediction.expectedPoints * 0.7) + (getValueScore(p) * 10 * 0.3)
   }));
   
   scored.sort((a, b) => b.compositeScore - a.compositeScore);
@@ -107,6 +109,9 @@ function selectBestForPosition(
     // Check constraints
     if (!canAddPlayer(p, [...selectedPlayers, ...selected], localTeamDistribution)) continue;
     if (p.player.price > localBudget) continue;
+    
+    // Must have high start probability (>= 0.6) to be considered
+    if (p.prediction.startProbability < 0.6) continue;
     
     // Add player
     selected.push(p);
@@ -124,6 +129,7 @@ function selectBestForPosition(
       if (selected.length >= count) break;
       if (!canAddPlayer(p, [...selectedPlayers, ...selected], localTeamDistribution)) continue;
       if (p.player.price > localBudget) continue;
+      if (p.prediction.startProbability < 0.5) continue;
       
       selected.push(p);
       localTeamDistribution[p.player.teamId] = (localTeamDistribution[p.player.teamId] || 0) + 1;
@@ -153,10 +159,10 @@ function tryBuildSquad(
   let sortedFwds = [...fwds];
   
   if (strategy === 'points') {
-    sortedGks.sort((a, b) => b.prediction.predictedPoints - a.prediction.predictedPoints);
-    sortedDefs.sort((a, b) => b.prediction.predictedPoints - a.prediction.predictedPoints);
-    sortedMids.sort((a, b) => b.prediction.predictedPoints - a.prediction.predictedPoints);
-    sortedFwds.sort((a, b) => b.prediction.predictedPoints - a.prediction.predictedPoints);
+    sortedGks.sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints);
+    sortedDefs.sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints);
+    sortedMids.sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints);
+    sortedFwds.sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints);
   } else if (strategy === 'value') {
     sortedGks.sort((a, b) => getValueScore(b) - getValueScore(a));
     sortedDefs.sort((a, b) => getValueScore(b) - getValueScore(a));
@@ -164,14 +170,14 @@ function tryBuildSquad(
     sortedFwds.sort((a, b) => getValueScore(b) - getValueScore(a));
   } else {
     // Balanced: mix of points and value
-    sortedGks.sort((a, b) => (b.prediction.predictedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
-                              (a.prediction.predictedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
-    sortedDefs.sort((a, b) => (b.prediction.predictedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
-                              (a.prediction.predictedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
-    sortedMids.sort((a, b) => (b.prediction.predictedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
-                              (a.prediction.predictedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
-    sortedFwds.sort((a, b) => (b.prediction.predictedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
-                              (a.prediction.predictedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
+    sortedGks.sort((a, b) => (b.prediction.expectedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
+                              (a.prediction.expectedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
+    sortedDefs.sort((a, b) => (b.prediction.expectedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
+                              (a.prediction.expectedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
+    sortedMids.sort((a, b) => (b.prediction.expectedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
+                              (a.prediction.expectedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
+    sortedFwds.sort((a, b) => (b.prediction.expectedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
+                              (a.prediction.expectedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
   }
   
   // Select GK first (usually only 1-2 options)
@@ -211,11 +217,11 @@ function tryBuildSquad(
   });
   
   const allPlayers = [...selectedGKs, ...selectedDefs, ...selectedMids, ...selectedFwds];
-  const totalPoints = allPlayers.reduce((sum, p) => sum + p.prediction.predictedPoints, 0);
+  const totalPoints = allPlayers.reduce((sum, p) => sum + p.prediction.expectedPoints, 0);
   const totalPrice = allPlayers.reduce((sum, p) => sum + p.player.price, 0);
   
   // Select captain (highest predicted points) and vice-captain
-  const sortedByPoints = [...allPlayers].sort((a, b) => b.prediction.predictedPoints - a.prediction.predictedPoints);
+  const sortedByPoints = [...allPlayers].sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints);
   const captain = sortedByPoints[0];
   const viceCaptain = sortedByPoints[1];
   

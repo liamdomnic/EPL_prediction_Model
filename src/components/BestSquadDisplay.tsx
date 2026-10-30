@@ -61,7 +61,7 @@ export function BestSquadDisplay() {
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xl font-bold">{player.prediction.predictedPoints}</div>
+            <div className="text-xl font-bold">{player.prediction.expectedPoints}</div>
             <div className="text-xs text-purple-200">pts</div>
           </div>
         </div>
@@ -70,11 +70,11 @@ export function BestSquadDisplay() {
           <span className="text-purple-200">{player.fixture}</span>
           <div className="flex gap-2">
             {isDefOrGk ? (
-              <span className="text-purple-300">🧤{player.prediction.cleanSheetProb}%</span>
+              <span className="text-purple-300">🧤{Math.round(player.prediction.expectedCleanSheet * 100)}%</span>
             ) : (
               <>
-                <span className="text-green-300">⚽{player.prediction.goalProb}%</span>
-                <span className="text-blue-300">🎯{player.prediction.assistProb}%</span>
+                <span className="text-green-300">⚽{player.prediction.expectedGoals.toFixed(2)}</span>
+                <span className="text-blue-300">🎯{player.prediction.expectedAssists.toFixed(2)}</span>
               </>
             )}
           </div>
@@ -84,6 +84,10 @@ export function BestSquadDisplay() {
           <div className="flex items-center justify-between text-xs">
             <span className="text-purple-200">FPL: {player.player.points}pts</span>
             <span className="text-purple-200">£{player.player.price}m</span>
+          </div>
+          <div className="flex items-center justify-between text-xs mt-1">
+            <span className="text-purple-200">Min: {player.prediction.expectedMinutes}</span>
+            <span className="text-purple-200">Start: {Math.round(player.prediction.startProbability * 100)}%</span>
           </div>
         </div>
       </div>
@@ -139,9 +143,9 @@ export function BestSquadDisplay() {
               </div>
             </div>
             <div className="text-sm">
-              <span className="text-yellow-300 font-bold">{squad.captain.prediction.predictedPoints}</span>
+              <span className="text-yellow-300 font-bold">{squad.captain.prediction.expectedPoints}</span>
               <span className="text-emerald-200"> × 2 = </span>
-              <span className="text-yellow-300 font-bold">{(squad.captain.prediction.predictedPoints * 2).toFixed(1)}</span>
+              <span className="text-yellow-300 font-bold">{(squad.captain.prediction.expectedPoints * 2).toFixed(1)}</span>
               <span className="text-emerald-200"> pts</span>
             </div>
           </div>
@@ -159,7 +163,7 @@ export function BestSquadDisplay() {
               </div>
             </div>
             <div className="text-sm">
-              <span className="text-gray-300 font-bold">{squad.viceCaptain.prediction.predictedPoints}</span>
+              <span className="text-gray-300 font-bold">{squad.viceCaptain.prediction.expectedPoints}</span>
               <span className="text-emerald-200"> pts (backup captain)</span>
             </div>
           </div>
@@ -284,7 +288,7 @@ export function BestSquadDisplay() {
           </div>
           <div>
             <div className="text-2xl font-bold">
-              {Math.max(...squad.allPlayers.map(p => p.prediction.predictedPoints))}
+              {Math.max(...squad.allPlayers.map(p => p.prediction.expectedPoints))}
             </div>
             <div className="text-xs text-emerald-200">Top Score</div>
           </div>
