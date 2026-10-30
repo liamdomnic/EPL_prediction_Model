@@ -1,11 +1,11 @@
 # Gameweek 9 Fixtures & Top FPL Picks - Feature Addition
 
 ## Overview
-Added a comprehensive GW9 fixtures section with automatic FPL player predictions and a "Top 15 FPL Picks" leaderboard that aggregates the highest-predicted players across all fixtures.
+Added a comprehensive GW9 fixtures section with automatic FPL player predictions and a "Top 20 FPL Picks" leaderboard that aggregates the highest-predicted players across all fixtures.
 
 ## Features Added
 
-### 1. 🏆 Top 15 FPL Picks for GW9
+### 1. 🏆 Top 20 FPL Picks for GW9
 - **Automatic Aggregation**: Collects all players from all 10 GW9 fixtures
 - **Smart Ranking**: Sorts by predicted FPL points using position-specific models
 - **Visual Leaderboard**: 
@@ -65,9 +65,9 @@ Added a comprehensive GW9 fixtures section with automatic FPL player predictions
 
 ## Usage
 
-### Viewing Top 15 Picks
-1. Navigate to "Match Predictions" tab
-2. Top section shows "Top 15 FPL Picks for GW9"
+### Viewing Top 20 Picks
+1. Navigate to "Fantasy Premier League" tab
+2. Top section shows "Top 20 FPL Picks for GW9"
 3. Cards show rank, player, team, position, predicted points
 4. Click any card to jump to that fixture
 

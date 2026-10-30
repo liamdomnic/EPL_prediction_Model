@@ -16,22 +16,22 @@ export function GW9Fixtures() {
     }));
   });
 
-  // Sort by predicted points and get top 15
-  const top15Players = allGW9Players
+  // Sort by predicted points and get top 20
+  const top20Players = allGW9Players
     .sort((a, b) => b.prediction.predictedPoints - a.prediction.predictedPoints)
-    .slice(0, 15);
+    .slice(0, 20);
 
   return (
     <div className="space-y-6">
       {/* Best XI Squad */}
       <BestSquadDisplay />
 
-      {/* Top 15 FPL Picks Header */}
+      {/* Top 20 FPL Picks Header */}
       <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-xl p-6 text-white shadow-lg">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-2xl font-bold flex items-center gap-2">
-              🏆 Top 15 FPL Picks for GW9
+              🏆 Top 20 FPL Picks for GW9
             </h2>
             <p className="text-purple-100 text-sm mt-1">
               Highest predicted FPL points across all fixtures
@@ -43,9 +43,9 @@ export function GW9Fixtures() {
           </div>
         </div>
 
-        {/* Top 15 Players Grid */}
+        {/* Top 20 Players Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {top15Players.map((player, idx) => {
+          {top20Players.map((player, idx) => {
             const team = teams.find(t => t.id === player.player.teamId);
             const rankColors = [
               'bg-yellow-400 text-yellow-900', // 1st
