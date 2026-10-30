@@ -6,6 +6,7 @@ import {
   TeamComparison,
   TopPerformersByTeam,
 } from "./components/MatchPredictorFPL";
+import { GW9Fixtures } from "./components/GW9Fixtures";
 
 // GW8 Results
 const gw8Results = [
@@ -777,7 +778,12 @@ export default function App() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        {activeTab === "predictions" && <PredictionsTab />}
+        {activeTab === "predictions" && (
+          <>
+            <GW9Fixtures />
+            <PredictionsTab />
+          </>
+        )}
         {activeTab === "fpl" && <FPLTab />}
       </main>
       <footer className="bg-gray-900 text-gray-400 text-center py-6 text-sm">
