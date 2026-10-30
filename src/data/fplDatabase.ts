@@ -433,6 +433,30 @@ export function predictPlayerPerformance(
   const opponentStrength = getTeamStrength(opponentTeamId);
   const ownStrength = getTeamStrength(player.teamId);
   
+  // Pattern-based analysis
+  const highScoringTeams = ['bri', 'che', 'mci']; // Brighton, Chelsea, Man City
+  const isHighScoringGame = highScoringTeams.includes(player.teamId) || highScoringTeams.includes(opponentTeamId);
+  
+  const drawProneTeams = ['bre', 'lee', 'hul', 'eve', 'mun']; // Brentford, Leeds, Hull, Everton, Man Utd
+  const isDrawProneGame = drawProneTeams.includes(player.teamId) || drawProneTeams.includes(opponentTeamId);
+  
+  // Clean sheet rates from GW1-8 data
+  const cleanSheetRates: Record<string, number> = {
+    'ars': 0.625, // 5/8 clean sheets
+    'bri': 0.50,  // 4/8
+    'mci': 0.375, // 3/8
+    'liv': 0.375, // 3/8
+    'lee': 0.375, // 3/8
+    'bre': 0.25,  // 2/8
+    'eve': 0.25,  // 2/8
+    'nfo': 0.125, // 1/8
+    'mun': 0.125, // 1/8
+    'cry': 0.125, // 1/8
+    'ips': 0.0,   // 0/8
+    'shu': 0.0,   // 0/8
+    'bur': 0.0,   // 0/8
+  };
+  
   // Calculate match difficulty (1-5 scale, 5 = hardest)
   const matchDifficulty = isHome 
     ? 5 - ((ownStrength.overall - opponentStrength.overall) / 10 + 2.5)
@@ -512,6 +536,17 @@ export function predictPlayerPerformance(
       (minutesFactor * 0.05)
     ) * 6; // Scale to realistic FPL range
     
+    // High-scoring game bonus for attackers
+    if (isHighScoringGame) {
+      predicted *= 1.15; // 15% boost for high-scoring games
+      factors.push({
+        label: "High-Scoring Game",
+        impact: "Brighton/Chelsea/Man City involved",
+        value: 1.15,
+        weight: 0.15
+      });
+    }
+    
     // Goal probability (based on opponent defense weakness and form)
     goalProb = Math.min(0.7, (oppDefWeakness * formFactor * 0.15));
     
@@ -577,6 +612,17 @@ export function predictPlayerPerformance(
       (minutesFactor * 0.10)
     ) * 5;
     
+    // High-scoring game bonus for midfielders
+    if (isHighScoringGame) {
+      predicted *= 1.12; // 12% boost for high-scoring games
+      factors.push({
+        label: "High-Scoring Game",
+        impact: "Brighton/Chelsea/Man City involved",
+        value: 1.12,
+        weight: 0.12
+      });
+    }
+    
     goalProb = Math.min(0.5, (oppDefWeakness * formFactor * 0.10));
     assistProb = Math.min(0.6, (teamAttack * formFactor * 0.12));
     
@@ -610,10 +656,14 @@ export function predictPlayerPerformance(
     });
     
     // Factor 4: Clean Sheet Probability (15% weight)
-    cleanSheetProb = Math.min(0.65, (ownDefense * oppAttackWeakness * 0.45));
+    // Use actual clean sheet rates from GW1-8 data
+    const baseCleanSheetRate = cleanSheetRates[player.teamId] || 0.25;
+    const opponentAttackFactor = Math.max(0.5, Math.min(1.5, 1.2 - (opponentStrength.attackingThreat / 50)));
+    cleanSheetProb = Math.min(0.75, baseCleanSheetRate * opponentAttackFactor * (isHome ? 1.15 : 0.90));
+    
     factors.push({ 
       label: "Clean Sheet", 
-      impact: (cleanSheetProb * 100).toFixed(0) + "% chance", 
+      impact: (cleanSheetProb * 100).toFixed(0) + "% chance (based on " + (baseCleanSheetRate * 100).toFixed(0) + "% team rate)", 
       value: cleanSheetProb,
       weight: 0.15
     });
@@ -678,10 +728,14 @@ export function predictPlayerPerformance(
     });
     
     // Factor 4: Clean Sheet Probability (15% weight)
-    cleanSheetProb = Math.min(0.7, (ownDefense * oppAttackWeakness * 0.5));
+    // Use actual clean sheet rates from GW1-8 data
+    const baseCleanSheetRate = cleanSheetRates[player.teamId] || 0.25;
+    const opponentAttackFactor = Math.max(0.5, Math.min(1.5, 1.2 - (opponentStrength.attackingThreat / 50)));
+    cleanSheetProb = Math.min(0.80, baseCleanSheetRate * opponentAttackFactor * (isHome ? 1.18 : 0.88));
+    
     factors.push({ 
       label: "Clean Sheet", 
-      impact: (cleanSheetProb * 100).toFixed(0) + "% chance", 
+      impact: (cleanSheetProb * 100).toFixed(0) + "% chance (based on " + (baseCleanSheetRate * 100).toFixed(0) + "% team rate)", 
       value: cleanSheetProb,
       weight: 0.15
     });

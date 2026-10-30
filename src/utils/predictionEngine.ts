@@ -12,6 +12,10 @@ export interface MatchPrediction {
   bttsProb: number;
   confidence: number;
   mostLikelyScore: { home: number; away: number; prob: number };
+  highScoringGame: boolean;
+  drawProne: boolean;
+  homeCleanSheetProb: number;
+  awayCleanSheetProb: number;
 }
 
 // Poisson distribution probability
@@ -163,6 +167,18 @@ export function predictMatch(homeTeam: Team, awayTeam: Team): MatchPrediction {
   const maxProb = Math.max(probabilities.homeWin, probabilities.draw, probabilities.awayWin);
   const confidence = Math.min(95, Math.max(40, (maxProb - 0.33) * 200 + 50));
 
+  // Pattern-based analysis
+  const highScoringTeams = ['bri', 'che', 'mci']; // Brighton, Chelsea, Man City
+  const highScoringGame = highScoringTeams.includes(homeTeam.id) || highScoringTeams.includes(awayTeam.id);
+  
+  const drawProneTeams = ['bre', 'lee', 'hul', 'eve', 'mun']; // Brentford, Leeds, Hull, Everton, Man Utd
+  const drawProne = drawProneTeams.includes(homeTeam.id) || drawProneTeams.includes(awayTeam.id);
+  
+  // Clean sheet probabilities based on defensive strength
+  // Lower defenseStrength = better defense = higher clean sheet probability
+  const homeCleanSheetProb = Math.max(0, Math.min(80, (2 - awayTeam.attackStrength) * 40));
+  const awayCleanSheetProb = Math.max(0, Math.min(70, (2 - homeTeam.attackStrength) * 35));
+
   return {
     homeTeam,
     awayTeam,
@@ -175,6 +191,10 @@ export function predictMatch(homeTeam: Team, awayTeam: Team): MatchPrediction {
     bttsProb: btts * 100,
     confidence,
     mostLikelyScore: mostLikely,
+    highScoringGame,
+    drawProne,
+    homeCleanSheetProb: Math.round(homeCleanSheetProb),
+    awayCleanSheetProb: Math.round(awayCleanSheetProb),
   };
 }
 
