@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { upcomingFixtures } from '../data/teams';
 import { rankPlayersForMatch } from '../data/fplDatabase';
 import { teams } from '../data/teams';
+import { BestSquadDisplay } from './BestSquadDisplay';
 
 export function GW9Fixtures() {
   const [selectedFixture, setSelectedFixture] = useState<number | null>(null);
@@ -22,6 +23,9 @@ export function GW9Fixtures() {
 
   return (
     <div className="space-y-6">
+      {/* Best XI Squad */}
+      <BestSquadDisplay />
+
       {/* Top 15 FPL Picks Header */}
       <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-xl p-6 text-white shadow-lg">
         <div className="flex items-center justify-between mb-4">
