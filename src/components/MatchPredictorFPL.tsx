@@ -185,7 +185,7 @@ export function MatchPredictorFPL() {
         <span className="flex items-center gap-2"><span className="w-3 h-3 bg-yellow-400 rounded-full"></span> Top 3</span>
         <span className="flex items-center gap-2"><span className="w-3 h-3 bg-emerald-500 rounded-full"></span> Top 5</span>
         <span className="flex items-center gap-2"><span className="w-3 h-3 bg-blue-500 rounded-full"></span> Top 10</span>
-        <span className="ml-auto">Injury-aware • Budget-optimized predictions</span>
+        <span className="ml-auto">Component-based predictions • Injury-aware • Budget-optimized</span>
       </div>
     </div>
   );

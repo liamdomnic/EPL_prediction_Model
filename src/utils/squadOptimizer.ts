@@ -80,7 +80,7 @@ function getValueScore(player: RankedPlayer): number {
   return player.prediction.expectedPoints / player.player.price;
 }
 
-// Smart selection: MAXIMIZES BUDGET USAGE while getting best points
+// Smart selection: tries to maximize points while respecting constraints
 function selectBestForPosition(
   candidates: RankedPlayer[],
   count: number,
@@ -92,24 +92,11 @@ function selectBestForPosition(
   const localTeamDistribution = { ...teamDistribution };
   let localBudget = remainingBudget;
   
-  // Filter valid candidates first
-  const validCandidates = candidates.filter(p => 
-    p.prediction.startProbability >= 0.6 &&
-    canAddPlayer(p, selectedPlayers, localTeamDistribution) &&
-    p.player.price <= localBudget
-  );
-  
-  if (validCandidates.length === 0) return [];
-  
-  // Strategy: Pick highest points players that still leave room for other positions
-  // Calculate minimum cost needed for remaining positions
-  const positionsLeft = count - selected.length;
-  
-  // Sort by points per million (value) but prioritize high-point players
-  const scored = validCandidates.map(p => ({
+  // Sort candidates by a combined score of predicted points AND value
+  // This prevents picking 3 expensive players that blow the budget
+  const scored = candidates.map(p => ({
     player: p,
-    // Weight: 80% points, 20% value (to maximize budget usage)
-    compositeScore: (p.prediction.expectedPoints * 0.8) + (getValueScore(p) * 10 * 0.2)
+    compositeScore: (p.prediction.expectedPoints * 0.7) + (getValueScore(p) * 10 * 0.3)
   }));
   
   scored.sort((a, b) => b.compositeScore - a.compositeScore);
@@ -119,8 +106,12 @@ function selectBestForPosition(
     
     const p = candidate.player;
     
-    // Check if we can still afford this player and have budget for remaining needs
+    // Check constraints
+    if (!canAddPlayer(p, [...selectedPlayers, ...selected], localTeamDistribution)) continue;
     if (p.player.price > localBudget) continue;
+    
+    // Must have high start probability (>= 0.6) to be considered
+    if (p.prediction.startProbability < 0.6) continue;
     
     // Add player
     selected.push(p);
@@ -128,16 +119,17 @@ function selectBestForPosition(
     localBudget -= p.player.price;
   }
   
-  // If we couldn't fill with top picks, use cheapest available
+  // If we couldn't fill the position with top picks, try with cheaper options
   if (selected.length < count) {
     const remaining = candidates
-      .filter(p => !selected.includes(p) && p.prediction.startProbability >= 0.5)
-      .sort((a, b) => a.player.price - b.player.price);
+      .filter(p => !selected.includes(p))
+      .sort((a, b) => a.player.price - b.player.price); // Cheapest first
     
     for (const p of remaining) {
       if (selected.length >= count) break;
       if (!canAddPlayer(p, [...selectedPlayers, ...selected], localTeamDistribution)) continue;
       if (p.player.price > localBudget) continue;
+      if (p.prediction.startProbability < 0.5) continue;
       
       selected.push(p);
       localTeamDistribution[p.player.teamId] = (localTeamDistribution[p.player.teamId] || 0) + 1;
@@ -148,7 +140,7 @@ function selectBestForPosition(
   return selected;
 }
 
-// Try multiple strategies and pick the best - MAXIMIZE BUDGET
+// Try multiple strategies and pick the best
 function tryBuildSquad(
   formation: Formation,
   gks: RankedPlayer[],
@@ -160,34 +152,32 @@ function tryBuildSquad(
   let teamDistribution: Record<string, number> = {};
   let remainingBudget = BUDGET;
   
-  // Strategy-specific sorting - prioritize budget maximization
+  // Strategy-specific sorting
   let sortedGks = [...gks];
   let sortedDefs = [...defs];
   let sortedMids = [...mids];
   let sortedFwds = [...fwds];
   
   if (strategy === 'points') {
-    // Maximize points while spending budget
     sortedGks.sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints);
     sortedDefs.sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints);
     sortedMids.sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints);
     sortedFwds.sort((a, b) => b.prediction.expectedPoints - a.prediction.expectedPoints);
   } else if (strategy === 'value') {
-    // Best value (points per £m) - allows more premium picks
     sortedGks.sort((a, b) => getValueScore(b) - getValueScore(a));
     sortedDefs.sort((a, b) => getValueScore(b) - getValueScore(a));
     sortedMids.sort((a, b) => getValueScore(b) - getValueScore(a));
     sortedFwds.sort((a, b) => getValueScore(b) - getValueScore(a));
   } else {
-    // Balanced: 70% points, 30% value - maximizes budget with good returns
-    sortedGks.sort((a, b) => (b.prediction.expectedPoints * 0.7 + getValueScore(b) * 15 * 0.3) - 
-                              (a.prediction.expectedPoints * 0.7 + getValueScore(a) * 15 * 0.3));
-    sortedDefs.sort((a, b) => (b.prediction.expectedPoints * 0.7 + getValueScore(b) * 15 * 0.3) - 
-                              (a.prediction.expectedPoints * 0.7 + getValueScore(a) * 15 * 0.3));
-    sortedMids.sort((a, b) => (b.prediction.expectedPoints * 0.7 + getValueScore(b) * 15 * 0.3) - 
-                              (a.prediction.expectedPoints * 0.7 + getValueScore(a) * 15 * 0.3));
-    sortedFwds.sort((a, b) => (b.prediction.expectedPoints * 0.7 + getValueScore(b) * 15 * 0.3) - 
-                              (a.prediction.expectedPoints * 0.7 + getValueScore(a) * 15 * 0.3));
+    // Balanced: mix of points and value
+    sortedGks.sort((a, b) => (b.prediction.expectedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
+                              (a.prediction.expectedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
+    sortedDefs.sort((a, b) => (b.prediction.expectedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
+                              (a.prediction.expectedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
+    sortedMids.sort((a, b) => (b.prediction.expectedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
+                              (a.prediction.expectedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
+    sortedFwds.sort((a, b) => (b.prediction.expectedPoints * 0.6 + getValueScore(b) * 15 * 0.4) - 
+                              (a.prediction.expectedPoints * 0.6 + getValueScore(a) * 15 * 0.4));
   }
   
   // Select GK first (usually only 1-2 options)
