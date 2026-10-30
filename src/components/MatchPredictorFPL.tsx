@@ -123,7 +123,7 @@ export function MatchPredictorFPL() {
       </div>
 
       {/* Ranked Players */}
-      <div className="p-4 max-h-[600px] overflow-y-auto">
+      <div className="p-4 max-h-[700px] overflow-y-auto">
         <div className="space-y-2">
           {filteredPlayers.map(({ player, prediction, isHome }, idx) => (
             <div
@@ -157,10 +157,17 @@ export function MatchPredictorFPL() {
                       {isHome ? "HOME" : "AWAY"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5 flex-wrap">
                     <span className="font-medium">FPL: {player.points}pts</span>
                     <span>£{player.price}m</span>
-                    <span className="text-gray-400">Confidence: {prediction.confidence.toFixed(0)}%</span>
+                    {player.position === "FWD" || player.position === "MID" ? (
+                      <>
+                        <span className="text-green-600">⚽ {prediction.goalProb}%</span>
+                        <span className="text-blue-600">🎯 {prediction.assistProb}%</span>
+                      </>
+                    ) : (
+                      <span className="text-purple-600">🧤 {prediction.cleanSheetProb}%</span>
+                    )}
                   </div>
                 </div>
 
@@ -182,14 +189,48 @@ export function MatchPredictorFPL() {
               {/* Factors Breakdown */}
               {showFactors === player.id && (
                 <div className="px-4 pb-3 border-t border-gray-100 pt-2">
+                  <div className="mb-2 text-xs text-gray-600 font-medium">
+                    Match Difficulty: {prediction.matchDifficulty.toFixed(1)}/5 
+                    <span className="ml-2 text-gray-400">
+                      ({prediction.matchDifficulty < 2.5 ? "Easy" : prediction.matchDifficulty < 3.5 ? "Medium" : "Hard"})
+                    </span>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {prediction.factors.map((factor, i) => (
-                      <div key={i} className="flex justify-between items-center text-xs bg-gray-50 rounded px-2 py-1.5">
-                        <span className="text-gray-600">{factor.label}</span>
-                        <span className="font-medium text-gray-800">{factor.impact}</span>
+                      <div key={i} className="bg-gray-50 rounded px-3 py-2">
+                        <div className="flex justify-between items-center text-xs mb-1">
+                          <span className="text-gray-600 font-medium">{factor.label}</span>
+                          <span className="text-gray-400">{(factor.weight * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-500">{factor.impact}</span>
+                          <span className="text-xs font-bold text-gray-800">
+                            {factor.value > 1.1 ? "↑" : factor.value < 0.9 ? "↓" : "→"} {factor.value.toFixed(2)}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
+                  {(player.position === "FWD" || player.position === "MID") && (
+                    <div className="mt-3 p-2 bg-blue-50 rounded text-xs">
+                      <div className="font-medium text-blue-900 mb-1">Attacking Probabilities:</div>
+                      <div className="flex gap-4">
+                        <span className="text-green-700">Goal: {prediction.goalProb}%</span>
+                        <span className="text-blue-700">Assist: {prediction.assistProb}%</span>
+                      </div>
+                    </div>
+                  )}
+                  {(player.position === "DEF" || player.position === "GK") && (
+                    <div className="mt-3 p-2 bg-purple-50 rounded text-xs">
+                      <div className="font-medium text-purple-900 mb-1">Defensive Probabilities:</div>
+                      <div className="flex gap-4">
+                        <span className="text-purple-700">Clean Sheet: {prediction.cleanSheetProb}%</span>
+                        {player.position === "DEF" && prediction.goalProb > 0 && (
+                          <span className="text-green-700">Goal: {prediction.goalProb}%</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -202,7 +243,7 @@ export function MatchPredictorFPL() {
         <span className="flex items-center gap-1"><span className="w-3 h-3 bg-yellow-400 rounded-full"></span> Top 3</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-500 rounded-full"></span> Top 5</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-500 rounded-full"></span> Top 10</span>
-        <span className="ml-auto">Based on: Form, Price, Position, Home/Away, Opponent Strength, Clean Sheet Chance</span>
+        <span className="ml-auto">Model: Opponent Stats • Form • Quality • Team Strength • Home/Away • Role</span>
       </div>
     </div>
   );

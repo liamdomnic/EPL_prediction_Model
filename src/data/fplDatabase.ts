@@ -364,16 +364,52 @@ export function getPlayersByPosition(teamId: string, position: Position): FPLPla
 }
 
 // Team strength metrics (derived from player quality)
-export function getTeamStrength(teamId: string): { attack: number; defense: number; overall: number } {
+export function getTeamStrength(teamId: string): { 
+  attack: number; 
+  defense: number; 
+  overall: number;
+  goalsScored: number;
+  goalsConceded: number;
+  cleanSheetRate: number;
+  attackingThreat: number;
+  defensiveStability: number;
+} {
   const players = fplPlayers.filter(p => p.teamId === teamId);
   const attackers = players.filter(p => p.position === "FWD" || p.position === "MID");
   const defenders = players.filter(p => p.position === "DEF" || p.position === "GK");
+  const gks = players.filter(p => p.position === "GK");
   
   const attack = attackers.reduce((s, p) => s + p.points, 0) / Math.max(attackers.length, 1);
   const defense = defenders.reduce((s, p) => s + p.points, 0) / Math.max(defenders.length, 1);
   const overall = players.reduce((s, p) => s + p.points, 0) / Math.max(players.length, 1);
   
-  return { attack, defense, overall };
+  // Estimate goals scored/conceded from player points
+  // High attacking points = more goals scored
+  // High defensive points = fewer goals conceded + clean sheets
+  const goalsScored = attack * 1.2; // Rough proxy
+  const goalsConceded = 50 - (defense * 0.8); // Inverse relationship
+  const cleanSheetRate = Math.min(0.6, defense / 60); // Higher defense = more clean sheets
+  
+  // Attacking threat: combination of goals and assists potential
+  const attackingThreat = attackers
+    .filter(p => p.points > 20) // Only count key attackers
+    .reduce((s, p) => s + p.points, 0) / Math.max(attackers.filter(p => p.points > 20).length, 1);
+  
+  // Defensive stability: consistency of defensive players
+  const defensiveStability = defenders
+    .filter(p => p.points > 15) // Only count key defenders
+    .reduce((s, p) => s + p.points, 0) / Math.max(defenders.filter(p => p.points > 15).length, 1);
+  
+  return { 
+    attack, 
+    defense, 
+    overall,
+    goalsScored,
+    goalsConceded,
+    cleanSheetRate,
+    attackingThreat,
+    defensiveStability
+  };
 }
 
 // Predict player performance for a specific match
@@ -381,72 +417,316 @@ export function predictPlayerPerformance(
   player: FPLPlayer,
   isHome: boolean,
   opponentTeamId: string
-): { predictedPoints: number; confidence: number; factors: { label: string; impact: string; value: number }[] } {
-  const factors: { label: string; impact: string; value: number }[] = [];
-  let predicted = 0;
-  
-  // Factor 1: Current form (FPL points) - weighted heavily
-  const formFactor = player.points / 10; // normalize
-  factors.push({ label: "Current Form", impact: `${player.points} FPL pts`, value: formFactor });
-  predicted += formFactor * 2.5;
-  
-  // Factor 2: Price (proxy for quality/ownership)
-  const priceFactor = player.price / 5; // normalize
-  factors.push({ label: "Player Value", impact: `£${player.price}m`, value: priceFactor });
-  predicted += priceFactor * 0.8;
-  
-  // Factor 3: Position-specific scoring potential
-  let posMultiplier = 1.0;
-  if (player.position === "FWD") posMultiplier = 1.2;
-  else if (player.position === "MID") posMultiplier = 1.1;
-  else if (player.position === "DEF") posMultiplier = 0.9;
-  else posMultiplier = 0.7; // GK
-  factors.push({ label: "Position Bonus", impact: player.position, value: posMultiplier });
-  predicted *= posMultiplier;
-  
-  // Factor 4: Home advantage
-  if (isHome) {
-    predicted *= 1.15;
-    factors.push({ label: "Home Advantage", impact: "+15%", value: 1.15 });
-  } else {
-    predicted *= 0.9;
-    factors.push({ label: "Away Penalty", impact: "-10%", value: 0.9 });
-  }
-  
-  // Factor 5: Opponent defensive strength
+): { 
+  predictedPoints: number; 
+  confidence: number; 
+  matchDifficulty: number;
+  factors: { label: string; impact: string; value: number; weight: number }[];
+  goalProb: number;
+  assistProb: number;
+  cleanSheetProb: number;
+} {
+  const factors: { label: string; impact: string; value: number; weight: number }[] = [];
   const opponentStrength = getTeamStrength(opponentTeamId);
-  let oppFactor = 1.0;
-  if (player.position === "FWD" || player.position === "MID") {
-    // Attacking players benefit from weak opponent defense
-    oppFactor = 1.3 - (opponentStrength.defense / 50); // weaker defense = higher factor
-    if (oppFactor < 0.7) oppFactor = 0.7;
-    if (oppFactor > 1.4) oppFactor = 1.4;
+  const ownStrength = getTeamStrength(player.teamId);
+  
+  // Calculate match difficulty (1-5 scale, 5 = hardest)
+  const matchDifficulty = isHome 
+    ? 5 - ((ownStrength.overall - opponentStrength.overall) / 10 + 2.5)
+    : 5 - ((ownStrength.overall - opponentStrength.overall) / 10 + 2);
+  const normalizedDifficulty = Math.max(1, Math.min(5, matchDifficulty));
+  
+  let predicted = 0;
+  let goalProb = 0;
+  let assistProb = 0;
+  let cleanSheetProb = 0;
+  
+  // === POSITION-SPECIFIC PREDICTION MODELS ===
+  
+  if (player.position === "FWD") {
+    // STRIKER MODEL
+    // Factor 1: Opponent Defensive Weakness (30% weight)
+    const oppDefWeakness = Math.max(0.5, Math.min(1.5, 1.3 - (opponentStrength.defensiveStability / 40)));
+    factors.push({ 
+      label: "Opponent Defense", 
+      impact: opponentStrength.goalsConceded.toFixed(1) + " goals conceded", 
+      value: oppDefWeakness,
+      weight: 0.30
+    });
+    
+    // Factor 2: Player Form (25% weight)
+    const formFactor = Math.min(2.0, player.points / 25);
+    factors.push({ 
+      label: "Current Form", 
+      impact: player.points + " FPL pts", 
+      value: formFactor,
+      weight: 0.25
+    });
+    
+    // Factor 3: Player Quality/Price (15% weight)
+    const qualityFactor = Math.min(1.5, player.price / 8);
+    factors.push({ 
+      label: "Player Quality", 
+      impact: "£" + player.price + "m", 
+      value: qualityFactor,
+      weight: 0.15
+    });
+    
+    // Factor 4: Team Attacking Strength (15% weight)
+    const teamAttack = Math.min(1.4, ownStrength.attackingThreat / 35);
+    factors.push({ 
+      label: "Team Attack", 
+      impact: ownStrength.goalsScored.toFixed(1) + " goals scored", 
+      value: teamAttack,
+      weight: 0.15
+    });
+    
+    // Factor 5: Home Advantage (10% weight)
+    const homeFactor = isHome ? 1.2 : 0.85;
+    factors.push({ 
+      label: "Home/Away", 
+      impact: isHome ? "Home +20%" : "Away -15%", 
+      value: homeFactor,
+      weight: 0.10
+    });
+    
+    // Factor 6: Minutes/Role (5% weight)
+    const minutesFactor = player.points > 40 ? 1.2 : player.points > 20 ? 1.0 : 0.8;
+    factors.push({ 
+      label: "Starter Status", 
+      impact: minutesFactor > 1 ? "Key Player" : "Rotation Risk", 
+      value: minutesFactor,
+      weight: 0.05
+    });
+    
+    // Calculate predicted points
+    predicted = (
+      (oppDefWeakness * 0.30) +
+      (formFactor * 0.25) +
+      (qualityFactor * 0.15) +
+      (teamAttack * 0.15) +
+      (homeFactor * 0.10) +
+      (minutesFactor * 0.05)
+    ) * 6; // Scale to realistic FPL range
+    
+    // Goal probability (based on opponent defense weakness and form)
+    goalProb = Math.min(0.7, (oppDefWeakness * formFactor * 0.15));
+    
+    // Assist probability
+    assistProb = Math.min(0.5, (teamAttack * formFactor * 0.08));
+    
+  } else if (player.position === "MID") {
+    // MIDFIELDER MODEL (similar to forwards but with assist emphasis)
+    const oppDefWeakness = Math.max(0.6, Math.min(1.4, 1.25 - (opponentStrength.defensiveStability / 45)));
+    factors.push({ 
+      label: "Opponent Defense", 
+      impact: opponentStrength.goalsConceded.toFixed(1) + " goals conceded", 
+      value: oppDefWeakness,
+      weight: 0.25
+    });
+    
+    const formFactor = Math.min(1.8, player.points / 28);
+    factors.push({ 
+      label: "Current Form", 
+      impact: player.points + " FPL pts", 
+      value: formFactor,
+      weight: 0.25
+    });
+    
+    const qualityFactor = Math.min(1.4, player.price / 7.5);
+    factors.push({ 
+      label: "Player Quality", 
+      impact: "£" + player.price + "m", 
+      value: qualityFactor,
+      weight: 0.15
+    });
+    
+    const teamAttack = Math.min(1.3, ownStrength.attackingThreat / 38);
+    factors.push({ 
+      label: "Team Attack", 
+      impact: ownStrength.goalsScored.toFixed(1) + " goals scored", 
+      value: teamAttack,
+      weight: 0.15
+    });
+    
+    const homeFactor = isHome ? 1.15 : 0.88;
+    factors.push({ 
+      label: "Home/Away", 
+      impact: isHome ? "Home +15%" : "Away -12%", 
+      value: homeFactor,
+      weight: 0.10
+    });
+    
+    const minutesFactor = player.points > 30 ? 1.15 : player.points > 15 ? 1.0 : 0.85;
+    factors.push({ 
+      label: "Starter Status", 
+      impact: minutesFactor > 1 ? "Regular Starter" : "Rotation Risk", 
+      value: minutesFactor,
+      weight: 0.10
+    });
+    
+    predicted = (
+      (oppDefWeakness * 0.25) +
+      (formFactor * 0.25) +
+      (qualityFactor * 0.15) +
+      (teamAttack * 0.15) +
+      (homeFactor * 0.10) +
+      (minutesFactor * 0.10)
+    ) * 5;
+    
+    goalProb = Math.min(0.5, (oppDefWeakness * formFactor * 0.10));
+    assistProb = Math.min(0.6, (teamAttack * formFactor * 0.12));
+    
+  } else if (player.position === "DEF") {
+    // DEFENDER MODEL
+    // Factor 1: Opponent Attacking Weakness (25% weight)
+    const oppAttackWeakness = Math.max(0.6, Math.min(1.5, 1.35 - (opponentStrength.attackingThreat / 40)));
+    factors.push({ 
+      label: "Opponent Attack", 
+      impact: opponentStrength.goalsScored.toFixed(1) + " goals scored", 
+      value: oppAttackWeakness,
+      weight: 0.25
+    });
+    
+    // Factor 2: Own Team Defensive Strength (25% weight)
+    const ownDefense = Math.min(1.5, ownStrength.defensiveStability / 35);
+    factors.push({ 
+      label: "Team Defense", 
+      impact: ownStrength.goalsConceded.toFixed(1) + " goals conceded", 
+      value: ownDefense,
+      weight: 0.25
+    });
+    
+    // Factor 3: Player Form (20% weight)
+    const formFactor = Math.min(1.6, player.points / 30);
+    factors.push({ 
+      label: "Current Form", 
+      impact: player.points + " FPL pts", 
+      value: formFactor,
+      weight: 0.20
+    });
+    
+    // Factor 4: Clean Sheet Probability (15% weight)
+    cleanSheetProb = Math.min(0.65, (ownDefense * oppAttackWeakness * 0.45));
+    factors.push({ 
+      label: "Clean Sheet", 
+      impact: (cleanSheetProb * 100).toFixed(0) + "% chance", 
+      value: cleanSheetProb,
+      weight: 0.15
+    });
+    
+    // Factor 5: Attacking Threat from Defense (10% weight)
+    const attackingThreat = player.points > 25 ? 1.3 : player.points > 15 ? 1.1 : 0.9;
+    factors.push({ 
+      label: "Attacking Threat", 
+      impact: attackingThreat > 1.1 ? "Goal/Assist Threat" : "Defensive Role", 
+      value: attackingThreat,
+      weight: 0.10
+    });
+    
+    // Factor 6: Home Advantage (5% weight)
+    const homeFactor = isHome ? 1.1 : 0.92;
+    factors.push({ 
+      label: "Home/Away", 
+      impact: isHome ? "Home +10%" : "Away -8%", 
+      value: homeFactor,
+      weight: 0.05
+    });
+    
+    predicted = (
+      (oppAttackWeakness * 0.25) +
+      (ownDefense * 0.25) +
+      (formFactor * 0.20) +
+      (cleanSheetProb * 4 * 0.15) + // 4pts for clean sheet
+      (attackingThreat * 0.10) +
+      (homeFactor * 0.05)
+    ) * 3.5;
+    
+    goalProb = Math.min(0.2, (attackingThreat * 0.05));
+    assistProb = Math.min(0.3, (attackingThreat * 0.08));
+    
   } else {
-    // Defenders benefit from weak opponent attack
-    oppFactor = 1.3 - (opponentStrength.attack / 50);
-    if (oppFactor < 0.7) oppFactor = 0.7;
-    if (oppFactor > 1.4) oppFactor = 1.4;
+    // GOALKEEPER MODEL
+    // Factor 1: Opponent Attacking Weakness (30% weight)
+    const oppAttackWeakness = Math.max(0.6, Math.min(1.5, 1.4 - (opponentStrength.attackingThreat / 38)));
+    factors.push({ 
+      label: "Opponent Attack", 
+      impact: opponentStrength.goalsScored.toFixed(1) + " goals scored", 
+      value: oppAttackWeakness,
+      weight: 0.30
+    });
+    
+    // Factor 2: Own Team Defensive Strength (30% weight)
+    const ownDefense = Math.min(1.5, ownStrength.defensiveStability / 32);
+    factors.push({ 
+      label: "Team Defense", 
+      impact: ownStrength.goalsConceded.toFixed(1) + " goals conceded", 
+      value: ownDefense,
+      weight: 0.30
+    });
+    
+    // Factor 3: Player Form (20% weight)
+    const formFactor = Math.min(1.5, player.points / 35);
+    factors.push({ 
+      label: "Current Form", 
+      impact: player.points + " FPL pts", 
+      value: formFactor,
+      weight: 0.20
+    });
+    
+    // Factor 4: Clean Sheet Probability (15% weight)
+    cleanSheetProb = Math.min(0.7, (ownDefense * oppAttackWeakness * 0.5));
+    factors.push({ 
+      label: "Clean Sheet", 
+      impact: (cleanSheetProb * 100).toFixed(0) + "% chance", 
+      value: cleanSheetProb,
+      weight: 0.15
+    });
+    
+    // Factor 5: Home Advantage (5% weight)
+    const homeFactor = isHome ? 1.08 : 0.94;
+    factors.push({ 
+      label: "Home/Away", 
+      impact: isHome ? "Home +8%" : "Away -6%", 
+      value: homeFactor,
+      weight: 0.05
+    });
+    
+    predicted = (
+      (oppAttackWeakness * 0.30) +
+      (ownDefense * 0.30) +
+      (formFactor * 0.20) +
+      (cleanSheetProb * 4 * 0.15) +
+      (homeFactor * 0.05)
+    ) * 3;
+    
+    goalProb = 0;
+    assistProb = 0;
   }
-  factors.push({ label: "Opponent Weakness", impact: oppFactor > 1 ? "Favorable" : "Tough", value: oppFactor });
-  predicted *= oppFactor;
   
-  // Factor 6: Clean sheet potential (for DEF/GK)
-  if (player.position === "DEF" || player.position === "GK") {
-    const ownStrength = getTeamStrength(player.teamId);
-    const csProb = (ownStrength.defense / (ownStrength.defense + opponentStrength.attack)) * 0.4;
-    predicted += csProb * 4; // 4pts for clean sheet
-    factors.push({ label: "Clean Sheet Chance", impact: `${(csProb * 100).toFixed(0)}%`, value: csProb });
+  // Add clean sheet points for DEF/GK
+  if ((player.position === "DEF" || player.position === "GK") && cleanSheetProb > 0.3) {
+    predicted += cleanSheetProb * 4;
   }
   
-  // Factor 7: Goal/assist involvement rate
-  const involvementRate = player.points > 30 ? 1.2 : player.points > 15 ? 1.0 : 0.8;
-  factors.push({ label: "Involvement Rate", impact: involvementRate > 1 ? "High" : "Medium", value: involvementRate });
-  predicted *= involvementRate;
+  // Add goal/assist expectations
+  predicted += (goalProb * 4.5) + (assistProb * 3);
   
-  // Confidence based on data quality
-  const confidence = Math.min(90, Math.max(30, player.points * 1.5));
+  // Confidence based on player data quality
+  const confidence = Math.min(92, Math.max(35, 
+    (player.points > 30 ? 85 : player.points > 15 ? 65 : 45) +
+    (player.price > 7 ? 5 : 0)
+  ));
   
-  return { predictedPoints: Math.round(predicted * 10) / 10, confidence, factors };
+  return { 
+    predictedPoints: Math.round(predicted * 10) / 10, 
+    confidence,
+    matchDifficulty: normalizedDifficulty,
+    factors,
+    goalProb: Math.round(goalProb * 100),
+    assistProb: Math.round(assistProb * 100),
+    cleanSheetProb: Math.round(cleanSheetProb * 100)
+  };
 }
 
 // Rank players from two teams for a match
