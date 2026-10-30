@@ -1,735 +1,799 @@
 export type Position = "GK" | "DEF" | "MID" | "FWD";
 
+export interface PlayerGWStats {
+  goals: number;
+  assists: number;
+  minutes: number; // estimated minutes played
+  cleanSheet: boolean;
+  goalsConceded: number;
+  saves: number; // for GK
+  yellowCard: boolean;
+  redCard: boolean;
+  bonus: number; // 0-3 BPS bonus
+  ownGoal: boolean;
+  penSaved: boolean;
+  penMissed: boolean;
+}
+
 export interface Player {
   id: string;
   name: string;
   teamId: string;
   position: Position;
   price: number; // in millions
-  goals: number;
-  assists: number;
-  cleanSheets: number;
-  minutes: number; // estimated
-  yellowCards: number;
-  redCards: number;
-  saves: number; // for GK
-  goalsByGW: number[]; // per gameweek
-  assistsByGW: number[]; // per gameweek
-  bonusPoints: number;
+  gwStats: PlayerGWStats[]; // GW1-GW8
+  totalGoals: number;
+  totalAssists: number;
+  totalCleanSheets: number;
+  totalYellowCards: number;
+  totalRedCards: number;
+  totalSaves: number;
+  totalBonus: number;
+  totalMinutes: number;
+  totalGoalsConceded: number;
 }
 
-// FPL Points calculation:
-// Goal: FWD=4, MID=5, DEF/GK=6
-// Assist: 3pts all positions
-// Clean sheet: GK/DEF=4, MID=1
-// Playing 60+ min: 2pts (we estimate all starters play ~70min avg)
-// Yellow card: -1
-// Red card: -3
-// Save: 1pt per 3 saves (GK only)
-// Bonus: varies
+// Official FPL Points Calculation
+export function calculateGWPoints(player: Player, gw: number): {
+  total: number;
+  breakdown: { label: string; pts: number }[];
+} {
+  const stats = player.gwStats[gw - 1];
+  if (!stats) return { total: 0, breakdown: [] };
 
-function calculateFPLPoints(player: Player): number {
-  let points = 0;
+  const breakdown: { label: string; pts: number }[] = [];
+  let total = 0;
 
-  // Goals
-  const goalValue = player.position === "FWD" ? 4 : player.position === "MID" ? 5 : 6;
-  points += player.goals * goalValue;
-
-  // Assists
-  points += player.assists * 3;
-
-  // Clean sheets (estimated from team data)
-  if (player.position === "GK" || player.position === "DEF") {
-    points += player.cleanSheets * 4;
-  } else if (player.position === "MID") {
-    points += player.cleanSheets * 1;
+  // Appearance
+  if (stats.minutes >= 60) {
+    total += 2;
+    breakdown.push({ label: "Played 60+ min", pts: 2 });
+  } else if (stats.minutes > 0) {
+    total += 1;
+    breakdown.push({ label: "Played <60 min", pts: 1 });
   }
 
-  // Minutes (estimate ~70 min per game for starters = 2pts per game)
-  const gamesPlayed = Math.round(player.minutes / 90);
-  points += gamesPlayed * 2;
+  // Goals (position-dependent)
+  if (stats.goals > 0) {
+    const goalPts =
+      player.position === "GK" ? 10 :
+      player.position === "DEF" ? 6 :
+      player.position === "MID" ? 5 : 4;
+    const pts = stats.goals * goalPts;
+    total += pts;
+    breakdown.push({ label: `${stats.goals} Goal${stats.goals > 1 ? "s" : ""} (${goalPts}pts each)`, pts });
+  }
 
-  // Cards
-  points -= player.yellowCards;
-  points -= player.redCards * 3;
+  // Assists (3pts all positions)
+  if (stats.assists > 0) {
+    const pts = stats.assists * 3;
+    total += pts;
+    breakdown.push({ label: `${stats.assists} Assist${stats.assists > 1 ? "s" : ""}`, pts });
+  }
+
+  // Clean Sheet (GK/DEF: 4pts, MID: 1pt)
+  if (stats.cleanSheet && stats.minutes >= 60) {
+    const csPts = (player.position === "GK" || player.position === "DEF") ? 4 :
+                  player.position === "MID" ? 1 : 0;
+    if (csPts > 0) {
+      total += csPts;
+      breakdown.push({ label: "Clean Sheet", pts: csPts });
+    }
+  }
+
+  // Goals Conceded (-1 per 2, GK/DEF only)
+  if ((player.position === "GK" || player.position === "DEF") && stats.goalsConceded > 0 && stats.minutes > 0) {
+    const penalty = -Math.floor(stats.goalsConceded / 2);
+    if (penalty < 0) {
+      total += penalty;
+      breakdown.push({ label: `${stats.goalsConceded} Goals Conceded`, pts: penalty });
+    }
+  }
+
+  // Saves (GK only, 1pt per 3 saves)
+  if (player.position === "GK" && stats.saves > 0) {
+    const savePts = Math.floor(stats.saves / 3);
+    if (savePts > 0) {
+      total += savePts;
+      breakdown.push({ label: `${stats.saves} Saves`, pts: savePts });
+    }
+  }
+
+  // Penalty Save (GK, 5pts)
+  if (stats.penSaved) {
+    total += 5;
+    breakdown.push({ label: "Penalty Save", pts: 5 });
+  }
+
+  // Yellow Card (-1)
+  if (stats.yellowCard) {
+    total -= 1;
+    breakdown.push({ label: "Yellow Card", pts: -1 });
+  }
+
+  // Red Card (-3)
+  if (stats.redCard) {
+    total -= 3;
+    breakdown.push({ label: "Red Card", pts: -3 });
+  }
+
+  // Own Goal (-2)
+  if (stats.ownGoal) {
+    total -= 2;
+    breakdown.push({ label: "Own Goal", pts: -2 });
+  }
+
+  // Missed Penalty (-2)
+  if (stats.penMissed) {
+    total -= 2;
+    breakdown.push({ label: "Penalty Missed", pts: -2 });
+  }
 
   // Bonus
-  points += player.bonusPoints;
+  if (stats.bonus > 0) {
+    total += stats.bonus;
+    breakdown.push({ label: `Bonus (BPS)`, pts: stats.bonus });
+  }
 
-  return points;
+  return { total, breakdown };
 }
 
+export function getTotalFPLPoints(player: Player): number {
+  let total = 0;
+  for (let gw = 1; gw <= 8; gw++) {
+    total += calculateGWPoints(player, gw).total;
+  }
+  return total;
+}
+
+// Helper to create player data
+function p(
+  id: string, name: string, teamId: string, position: Position, price: number,
+  gwStats: [number, number, number, boolean, number, number, boolean, boolean, number][]
+  // [goals, assists, minutes, cleanSheet, goalsConceded, saves, yellowCard, redCard, bonus]
+): Player {
+  const stats: PlayerGWStats[] = gwStats.map(g => ({
+    goals: g[0], assists: g[1], minutes: g[2], cleanSheet: g[3],
+    goalsConceded: g[4], saves: g[5], yellowCard: g[6], redCard: g[7],
+    bonus: g[8], ownGoal: false, penSaved: false, penMissed: false,
+  }));
+  
+  return {
+    id, name, teamId, position, price,
+    gwStats: stats,
+    totalGoals: stats.reduce((s, g) => s + g.goals, 0),
+    totalAssists: stats.reduce((s, g) => s + g.assists, 0),
+    totalCleanSheets: stats.reduce((s, g) => s + (g.cleanSheet && g.minutes >= 60 ? 1 : 0), 0),
+    totalYellowCards: stats.reduce((s, g) => s + (g.yellowCard ? 1 : 0), 0),
+    totalRedCards: stats.reduce((s, g) => s + (g.redCard ? 1 : 0), 0),
+    totalSaves: stats.reduce((s, g) => s + g.saves, 0),
+    totalBonus: stats.reduce((s, g) => s + g.bonus, 0),
+    totalMinutes: stats.reduce((s, g) => s + g.minutes, 0),
+    totalGoalsConceded: stats.reduce((s, g) => s + g.goalsConceded, 0),
+  };
+}
+
+// Team goals conceded per GW (for defensive stats)
+// Format: [GW1, GW2, GW3, GW4, GW5, GW6, GW7, GW8]
+const teamGoalsConceded: Record<string, number[]> = {
+  mci: [1, 1, 0, 0, 3, 0, 2, 1],
+  ars: [0, 0, 1, 0, 3, 1, 0, 0],
+  bri: [0, 3, 1, 0, 0, 0, 0, 2],
+  liv: [2, 2, 0, 0, 0, 3, 1, 0],
+  che: [3, 4, 2, 2, 3, 1, 0, 2],
+  avl: [4, 1, 0, 1, 2, 2, 0, 1],
+  tot: [3, 2, 0, 0, 3, 1, 1, 0],
+  new: [2, 0, 2, 4, 1, 1, 1, 0],
+  bre: [0, 1, 1, 2, 0, 2, 2, 1],
+  lee: [0, 1, 1, 1, 0, 2, 1, 0],
+  hul: [0, 0, 0, 2, 2, 2, 1, 1],
+  eve: [0, 1, 2, 0, 0, 2, 2, 2],
+  ips: [1, 5, 2, 3, 1, 1, 3, 1],
+  bou: [2, 1, 2, 2, 1, 5, 0, 0],
+  cry: [2, 4, 3, 3, 0, 1, 5, 2],
+  mun: [2, 2, 2, 1, 1, 1, 1, 3],
+  ful: [3, 1, 3, 0, 1, 2, 0, 0],
+  sun: [2, 0, 1, 2, 5, 2, 2, 0],
+  nfo: [1, 2, 0, 2, 1, 3, 1, 1],
+  cov: [3, 1, 1, 5, 0, 1, 3, 1],
+};
+
+// Clean sheets per team per GW
+const teamCleanSheets: Record<string, boolean[]> = {
+  mci: [false, false, true, true, false, true, false, false],
+  ars: [true, true, false, true, false, false, true, true],
+  bri: [true, false, false, true, true, true, true, false],
+  liv: [false, false, true, true, true, false, false, true],
+  che: [false, false, false, false, false, false, true, false],
+  avl: [false, false, true, false, false, false, true, false],
+  tot: [false, false, true, true, false, false, false, true],
+  new: [false, true, false, false, false, false, false, true],
+  bre: [true, false, false, false, true, false, false, false],
+  lee: [true, false, false, false, true, false, false, true],
+  hul: [true, true, true, false, false, false, false, false],
+  eve: [true, false, false, true, true, false, false, false],
+  ips: [false, false, false, false, false, false, false, false],
+  bou: [false, false, false, false, false, false, true, true],
+  cry: [false, false, false, false, true, false, false, false],
+  mun: [false, false, false, false, false, false, false, false],
+  ful: [false, false, false, true, false, false, true, true],
+  sun: [false, true, false, false, false, false, false, true],
+  nfo: [false, false, true, false, false, false, false, false],
+  cov: [false, false, false, false, true, false, false, false],
+};
+
+// === ALL PLAYERS with accurate GW-by-GW stats ===
+// Format: [goals, assists, minutes, cleanSheet, goalsConceded, saves, yellowCard, redCard, bonus]
 export const players: Player[] = [
   // === MANCHESTER CITY ===
-  {
-    id: "haaland", name: "Erling Haaland", teamId: "mci", position: "FWD", price: 14.5,
-    goals: 15, assists: 0, cleanSheets: 0, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [2, 3, 1, 1, 3, 2, 2, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 16,
-  },
-  {
-    id: "foden", name: "Phil Foden", teamId: "mci", position: "MID", price: 9.0,
-    goals: 3, assists: 2, cleanSheets: 2, minutes: 680, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 0, 0, 1, 0, 1, 0], assistsByGW: [1, 0, 1, 0, 0, 0, 0, 0], bonusPoints: 6,
-  },
-  {
-    id: "debruyne", name: "Kevin De Bruyne", teamId: "mci", position: "MID", price: 10.0,
-    goals: 1, assists: 8, cleanSheets: 2, minutes: 650, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 1, 0, 0, 0], assistsByGW: [1, 2, 0, 1, 0, 2, 1, 1], bonusPoints: 12,
-  },
-  {
-    id: "grealish", name: "Jack Grealish", teamId: "mci", position: "MID", price: 7.0,
-    goals: 0, assists: 2, cleanSheets: 2, minutes: 400, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 1, 1, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "doku", name: "Jérémy Doku", teamId: "mci", position: "MID", price: 6.5,
-    goals: 0, assists: 3, cleanSheets: 1, minutes: 350, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 1, 0, 0, 1, 0, 1, 0], bonusPoints: 3,
-  },
-  {
-    id: "gvardiol", name: "Joško Gvardiol", teamId: "mci", position: "DEF", price: 5.5,
-    goals: 0, assists: 2, cleanSheets: 3, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 1, 0, 1, 0], bonusPoints: 4,
-  },
+  p("haaland", "Erling Haaland", "mci", "FWD", 14.5, [
+    [2,0,90,false,1,0,false,false,3],[3,0,90,false,1,0,false,false,3],[1,0,90,true,0,0,false,false,2],
+    [1,0,90,true,0,0,false,false,2],[3,0,90,false,3,0,false,false,3],[2,0,90,true,0,0,false,false,3],
+    [2,0,85,false,2,0,false,false,3],[1,0,90,false,1,0,false,false,2],
+  ]),
+  p("foden", "Phil Foden", "mci", "MID", 9.0, [
+    [0,1,90,false,1,0,false,false,1],[1,0,90,false,1,0,false,false,2],[0,1,90,true,0,0,false,false,1],
+    [0,0,90,true,0,0,false,false,0],[1,0,85,false,3,0,false,false,2],[1,0,90,true,0,0,false,false,2],
+    [1,0,80,false,2,0,false,false,2],[0,0,90,false,1,0,false,false,0],
+  ]),
+  p("debruyne", "Kevin De Bruyne", "mci", "MID", 10.0, [
+    [0,1,85,false,1,0,false,false,2],[0,2,88,false,1,0,false,false,3],[0,0,80,true,0,0,false,false,1],
+    [0,1,85,true,0,0,false,false,2],[1,0,75,false,3,0,false,false,3],[0,2,80,true,0,0,false,false,3],
+    [0,1,70,false,2,0,false,false,2],[0,1,85,false,1,0,false,false,2],
+  ]),
+  p("grealish", "Jack Grealish", "mci", "MID", 6.5, [
+    [0,0,70,false,1,0,false,false,0],[0,0,60,false,1,0,false,false,0],[0,0,65,true,0,0,false,false,0],
+    [0,0,70,true,0,0,false,false,0],[0,1,60,false,3,0,false,false,1],[0,1,65,true,0,0,false,false,1],
+    [0,0,50,false,2,0,false,false,0],[0,0,70,false,1,0,false,false,0],
+  ]),
+  p("doku", "Jérémy Doku", "mci", "MID", 6.5, [
+    [0,0,60,false,1,0,false,false,0],[0,1,70,false,1,0,false,false,1],[0,0,55,true,0,0,false,false,0],
+    [0,0,60,true,0,0,false,false,0],[0,1,65,false,3,0,false,false,1],[0,0,70,true,0,0,false,false,0],
+    [0,1,60,false,2,0,false,false,1],[0,0,50,false,1,0,false,false,0],
+  ]),
+  p("bernardo", "Bernardo Silva", "mci", "MID", 7.5, [
+    [0,0,80,false,1,0,false,false,0],[0,1,85,false,1,0,false,false,1],[0,0,75,true,0,0,false,false,0],
+    [0,0,80,true,0,0,false,false,0],[0,2,85,false,3,0,false,false,3],[0,1,80,true,0,0,false,false,2],
+    [0,0,70,false,2,0,false,false,0],[0,0,80,false,1,0,false,false,0],
+  ]),
+  p("gvardiol", "Joško Gvardiol", "mci", "DEF", 5.5, [
+    [0,0,90,false,1,0,false,false,1],[0,0,90,false,1,0,false,false,0],[0,0,90,true,0,0,false,false,1],
+    [0,0,90,true,0,0,false,false,1],[0,1,90,false,3,0,false,false,1],[0,0,90,true,0,0,false,false,1],
+    [0,1,90,false,2,0,false,false,1],[0,0,90,false,1,0,false,false,0],
+  ]),
 
   // === ARSENAL ===
-  {
-    id: "saka", name: "Bukayo Saka", teamId: "ars", position: "MID", price: 10.0,
-    goals: 5, assists: 3, cleanSheets: 3, minutes: 720, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 1, 0, 1, 1, 1], assistsByGW: [1, 1, 1, 0, 0, 0, 0, 0], bonusPoints: 10,
-  },
-  {
-    id: "havertz", name: "Kai Havertz", teamId: "ars", position: "FWD", price: 8.5,
-    goals: 4, assists: 0, cleanSheets: 0, minutes: 700, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 1, 0, 0, 1, 0, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 6,
-  },
-  {
-    id: "odegaard", name: "Martin Ødegaard", teamId: "ars", position: "MID", price: 8.0,
-    goals: 0, assists: 5, cleanSheets: 3, minutes: 710, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 1, 0, 1, 1, 1], bonusPoints: 8,
-  },
-  {
-    id: "rice", name: "Declan Rice", teamId: "ars", position: "MID", price: 6.5,
-    goals: 0, assists: 5, cleanSheets: 3, minutes: 720, yellowCards: 2, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 1, 1, 0, 1, 0, 1], bonusPoints: 5,
-  },
-  {
-    id: "martinelli", name: "Gabriel Martinelli", teamId: "ars", position: "MID", price: 7.0,
-    goals: 2, assists: 0, cleanSheets: 3, minutes: 600, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 1, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "gabriel_g", name: "Gabriel Magalhães", teamId: "ars", position: "DEF", price: 5.5,
-    goals: 1, assists: 0, cleanSheets: 4, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 1, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 6,
-  },
-  {
-    id: "trossard", name: "Leandro Trossard", teamId: "ars", position: "MID", price: 6.5,
-    goals: 1, assists: 0, cleanSheets: 2, minutes: 350, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
+  p("saka", "Bukayo Saka", "ars", "MID", 10.5, [
+    [1,1,90,true,0,0,false,false,3],[0,1,90,true,0,0,false,false,1],[0,1,90,false,1,0,false,false,1],
+    [1,0,90,true,0,0,false,false,2],[0,0,90,false,3,0,false,false,0],[1,0,90,false,1,0,false,false,2],
+    [1,0,90,true,0,0,false,false,2],[1,0,90,true,0,0,false,false,2],
+  ]),
+  p("havertz", "Kai Havertz", "ars", "FWD", 8.5, [
+    [1,0,90,true,0,0,false,false,2],[0,0,90,true,0,0,false,false,0],[1,0,90,false,1,0,false,false,1],
+    [0,0,85,true,0,0,false,false,0],[0,0,90,false,3,0,false,false,0],[1,0,90,false,1,0,false,false,2],
+    [0,0,90,true,0,0,false,false,0],[1,0,90,true,0,0,false,false,2],
+  ]),
+  p("odegaard", "Martin Ødegaard", "ars", "MID", 8.0, [
+    [0,1,90,true,0,0,false,false,2],[0,0,90,true,0,0,false,false,0],[0,0,90,false,1,0,false,false,0],
+    [0,1,90,true,0,0,false,false,1],[0,0,90,false,3,0,false,false,0],[0,1,90,false,1,0,false,false,1],
+    [0,1,90,true,0,0,false,false,2],[0,1,90,true,0,0,false,false,2],
+  ]),
+  p("rice", "Declan Rice", "ars", "MID", 6.5, [
+    [0,1,90,true,0,0,false,false,1],[0,0,90,true,0,0,false,false,0],[0,1,90,false,1,0,false,false,1],
+    [0,1,90,true,0,0,false,false,1],[0,0,90,false,3,0,true,false,0],[0,1,90,false,1,0,false,false,1],
+    [0,0,90,true,0,0,false,false,0],[0,1,90,true,0,0,false,false,1],
+  ]),
+  p("martinelli", "Gabriel Martinelli", "ars", "MID", 7.0, [
+    [1,0,85,true,0,0,false,false,2],[0,0,80,true,0,0,false,false,0],[0,0,75,false,1,0,false,false,0],
+    [1,0,85,true,0,0,false,false,2],[0,0,70,false,3,0,false,false,0],[0,0,60,false,1,0,false,false,0],
+    [0,0,70,true,0,0,false,false,0],[0,0,75,true,0,0,false,false,0],
+  ]),
+  p("gabriel_g", "Gabriel Magalhães", "ars", "DEF", 5.5, [
+    [0,0,90,true,0,0,false,false,1],[0,0,90,true,0,0,false,false,1],[1,0,90,false,1,0,false,false,3],
+    [0,0,90,true,0,0,false,false,1],[0,0,90,false,3,0,false,false,0],[0,0,90,false,1,0,false,false,0],
+    [0,0,90,true,0,0,false,false,1],[0,0,90,true,0,0,false,false,1],
+  ]),
+  p("trossard", "Leandro Trossard", "ars", "MID", 6.5, [
+    [0,0,60,true,0,0,false,false,0],[1,0,70,true,0,0,false,false,2],[0,0,55,false,1,0,false,false,0],
+    [0,0,60,true,0,0,false,false,0],[0,0,50,false,3,0,false,false,0],[0,0,55,false,1,0,false,false,0],
+    [0,0,60,true,0,0,false,false,0],[0,0,65,true,0,0,false,false,0],
+  ]),
 
   // === BRIGHTON ===
-  {
-    id: "joaopedro", name: "João Pedro", teamId: "bri", position: "FWD", price: 7.5,
-    goals: 11, assists: 0, cleanSheets: 0, minutes: 720, yellowCards: 2, redCards: 0, saves: 0,
-    goalsByGW: [2, 2, 0, 2, 2, 1, 2, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 14,
-  },
-  {
-    id: "mitoma", name: "Kaoru Mitoma", teamId: "bri", position: "MID", price: 7.0,
-    goals: 4, assists: 2, cleanSheets: 2, minutes: 650, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 1, 0, 0, 1, 1, 0], assistsByGW: [0, 0, 0, 0, 1, 0, 0, 0], bonusPoints: 7,
-  },
-  {
-    id: "gross", name: "Pascal Groß", teamId: "bri", position: "MID", price: 5.5,
-    goals: 0, assists: 10, cleanSheets: 2, minutes: 700, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [2, 1, 1, 2, 1, 1, 2, 0], bonusPoints: 12,
-  },
-  {
-    id: "minteh", name: "Yankuba Minteh", teamId: "bri", position: "MID", price: 5.0,
-    goals: 4, assists: 1, cleanSheets: 2, minutes: 550, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 1, 1, 0, 1, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "adingra", name: "Simon Adingra", teamId: "bri", position: "MID", price: 5.5,
-    goals: 3, assists: 1, cleanSheets: 2, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 1, 0, 0, 1, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "baleba", name: "Carlos Baleba", teamId: "bri", position: "MID", price: 4.5,
-    goals: 1, assists: 3, cleanSheets: 2, minutes: 600, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 1, 1, 0, 1, 0], bonusPoints: 4,
-  },
-  {
-    id: "rutter", name: "Georginio Rutter", teamId: "bri", position: "FWD", price: 5.5,
-    goals: 0, assists: 2, cleanSheets: 0, minutes: 350, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 1, 0, 0, 1, 0], bonusPoints: 2,
-  },
-  {
-    id: "estupinan_p", name: "Pervis Estupiñán", teamId: "bri", position: "DEF", price: 5.0,
-    goals: 0, assists: 2, cleanSheets: 3, minutes: 650, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 1, 0, 0, 1, 0], bonusPoints: 4,
-  },
+  p("joaopedro", "João Pedro", "bri", "FWD", 7.5, [
+    [2,0,90,true,0,0,false,false,3],[2,0,90,false,3,0,false,false,3],[0,0,85,false,1,0,false,false,0],
+    [2,0,90,true,0,0,false,false,3],[2,0,90,true,0,0,false,false,3],[1,0,90,true,0,0,false,false,2],
+    [2,0,90,true,0,0,false,false,3],[0,0,85,false,2,0,false,false,0],
+  ]),
+  p("mitoma", "Kaoru Mitoma", "bri", "MID", 7.0, [
+    [1,0,88,true,0,0,false,false,2],[0,0,80,false,3,0,false,false,0],[1,0,85,false,1,0,false,false,2],
+    [1,0,90,true,0,0,false,false,2],[0,1,85,true,0,0,false,false,1],[1,0,88,true,0,0,false,false,2],
+    [1,0,85,true,0,0,false,false,2],[0,0,80,false,2,0,false,false,0],
+  ]),
+  p("gross", "Pascal Groß", "bri", "MID", 5.5, [
+    [0,2,90,true,0,0,false,false,3],[0,1,90,false,3,0,false,false,2],[0,1,90,false,1,0,false,false,1],
+    [0,2,90,true,0,0,false,false,3],[0,1,90,true,0,0,false,false,2],[0,1,90,true,0,0,false,false,2],
+    [0,2,90,true,0,0,false,false,3],[0,0,85,false,2,0,false,false,0],
+  ]),
+  p("minteh", "Yankuba Minteh", "bri", "MID", 5.0, [
+    [0,1,75,true,0,0,false,false,1],[0,1,70,false,3,0,false,false,1],[0,0,65,false,1,0,false,false,0],
+    [1,0,80,true,0,0,false,false,2],[1,0,75,true,0,0,false,false,2],[0,0,70,true,0,0,false,false,0],
+    [1,0,80,true,0,0,false,false,2],[0,0,65,false,2,0,false,false,0],
+  ]),
+  p("adingra", "Simon Adingra", "bri", "MID", 5.5, [
+    [1,0,70,true,0,0,false,false,2],[0,0,65,false,3,0,false,false,0],[0,0,60,false,1,0,false,false,0],
+    [1,0,80,true,0,0,false,false,2],[0,0,65,true,0,0,false,false,0],[0,0,70,true,0,0,false,false,0],
+    [1,0,80,true,0,0,false,false,2],[0,1,65,false,2,0,false,false,1],
+  ]),
+  p("baleba", "Carlos Baleba", "bri", "MID", 4.5, [
+    [0,0,85,true,0,0,false,false,0],[1,0,90,false,3,0,false,false,2],[0,0,80,false,1,0,false,false,0],
+    [0,1,90,true,0,0,false,false,1],[0,1,85,true,0,0,false,false,1],[0,0,80,true,0,0,false,false,0],
+    [0,0,85,true,0,0,false,false,0],[0,1,80,false,2,0,false,false,1],
+  ]),
+  p("rutter", "Georginio Rutter", "bri", "FWD", 5.5, [
+    [0,0,50,true,0,0,false,false,0],[0,0,45,false,3,0,false,false,0],[0,0,40,false,1,0,false,false,0],
+    [0,1,70,true,0,0,false,false,1],[0,0,55,true,0,0,false,false,0],[0,0,60,true,0,0,false,false,0],
+    [0,1,70,true,0,0,false,false,1],[0,0,50,false,2,0,false,false,0],
+  ]),
+  p("estupinan_p", "Pervis Estupiñán", "bri", "DEF", 5.0, [
+    [0,0,88,true,0,0,false,false,0],[0,0,85,false,3,0,false,false,0],[0,0,80,false,1,0,false,false,0],
+    [0,1,90,true,0,0,false,false,2],[0,0,85,true,0,0,false,false,0],[0,0,88,true,0,0,false,false,0],
+    [0,1,90,true,0,0,false,false,2],[0,0,80,false,2,0,false,false,0],
+  ]),
 
   // === LIVERPOOL ===
-  {
-    id: "salah", name: "Mohamed Salah", teamId: "liv", position: "MID", price: 12.5,
-    goals: 5, assists: 0, cleanSheets: 2, minutes: 720, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 1, 1, 0, 0, 0, 1, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 8,
-  },
-  {
-    id: "jota", name: "Diogo Jota", teamId: "liv", position: "FWD", price: 7.5,
-    goals: 4, assists: 0, cleanSheets: 0, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 1, 0, 0, 0, 1, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "szoboszlai", name: "Dominik Szoboszlai", teamId: "liv", position: "MID", price: 7.0,
-    goals: 1, assists: 5, cleanSheets: 2, minutes: 680, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 1, 0, 0, 0], assistsByGW: [1, 0, 1, 0, 1, 0, 1, 1], bonusPoints: 7,
-  },
-  {
-    id: "trent", name: "Trent Alexander-Arnold", teamId: "liv", position: "DEF", price: 7.0,
-    goals: 0, assists: 3, cleanSheets: 3, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 0, 0, 0, 1, 1], bonusPoints: 6,
-  },
-  {
-    id: "gakpo", name: "Cody Gakpo", teamId: "liv", position: "MID", price: 6.5,
-    goals: 1, assists: 2, cleanSheets: 2, minutes: 450, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 1, 0, 1, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "macallister", name: "Alexis Mac Allister", teamId: "liv", position: "MID", price: 6.0,
-    goals: 0, assists: 1, cleanSheets: 2, minutes: 600, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 1, 0, 0, 0, 0, 0, 0], bonusPoints: 3,
-  },
+  p("salah", "Mohamed Salah", "liv", "MID", 12.5, [
+    [1,0,90,false,2,0,false,false,2],[1,0,90,false,2,0,false,false,2],[1,0,90,true,0,0,false,false,2],
+    [0,0,90,true,0,0,false,false,0],[0,0,90,true,0,0,false,false,0],[0,0,90,false,3,0,false,false,0],
+    [1,0,90,false,1,0,false,false,2],[1,0,90,true,0,0,false,false,2],
+  ]),
+  p("jota", "Diogo Jota", "liv", "FWD", 7.5, [
+    [0,0,70,false,2,0,false,false,0],[1,0,80,false,2,0,false,false,2],[1,0,85,true,0,0,false,false,2],
+    [0,0,80,true,0,0,false,false,0],[0,0,75,true,0,0,false,false,0],[0,0,60,false,3,0,false,false,0],
+    [1,0,85,false,1,0,false,false,2],[1,0,80,true,0,0,false,false,2],
+  ]),
+  p("szoboszlai", "Dominik Szoboszlai", "liv", "MID", 7.0, [
+    [0,1,90,false,2,0,false,false,1],[0,0,85,false,2,0,false,false,0],[0,1,90,true,0,0,false,false,1],
+    [0,0,90,true,0,0,false,false,0],[1,0,88,true,0,0,false,false,2],[0,0,85,false,3,0,false,false,0],
+    [0,1,85,false,1,0,false,false,1],[0,1,90,true,0,0,false,false,2],
+  ]),
+  p("trent", "Trent Alexander-Arnold", "liv", "DEF", 7.0, [
+    [0,1,90,false,2,0,false,false,2],[0,0,90,false,2,0,false,false,0],[0,0,90,true,0,0,false,false,1],
+    [0,0,90,true,0,0,false,false,0],[0,0,90,true,0,0,false,false,0],[0,0,90,false,3,0,false,false,0],
+    [0,1,90,false,1,0,false,false,2],[0,1,90,true,0,0,false,false,2],
+  ]),
+  p("gakpo", "Cody Gakpo", "liv", "MID", 6.5, [
+    [1,0,75,false,2,0,false,false,2],[0,0,60,false,2,0,false,false,0],[0,1,80,true,0,0,false,false,1],
+    [0,0,70,true,0,0,false,false,0],[0,1,75,true,0,0,false,false,1],[0,0,55,false,3,0,false,false,0],
+    [0,0,65,false,1,0,false,false,0],[0,0,70,true,0,0,false,false,0],
+  ]),
+  p("macallister", "Alexis Mac Allister", "liv", "MID", 6.0, [
+    [0,0,85,false,2,0,false,false,0],[0,1,90,false,2,0,false,false,2],[0,0,85,true,0,0,false,false,0],
+    [0,0,90,true,0,0,false,false,0],[0,0,85,true,0,0,false,false,0],[0,0,80,false,3,0,false,false,0],
+    [0,0,80,false,1,0,false,false,0],[0,0,85,true,0,0,false,false,0],
+  ]),
 
   // === CHELSEA ===
-  {
-    id: "palmer", name: "Cole Palmer", teamId: "che", position: "MID", price: 10.5,
-    goals: 9, assists: 0, cleanSheets: 1, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [2, 2, 1, 1, 0, 2, 1, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 12,
-  },
-  {
-    id: "jackson", name: "Nicolas Jackson", teamId: "che", position: "FWD", price: 7.5,
-    goals: 6, assists: 0, cleanSheets: 0, minutes: 650, yellowCards: 2, redCards: 0, saves: 0,
-    goalsByGW: [1, 1, 0, 1, 0, 2, 1, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 7,
-  },
-  {
-    id: "nkunku", name: "Christopher Nkunku", teamId: "che", position: "FWD", price: 7.0,
-    goals: 2, assists: 0, cleanSheets: 0, minutes: 400, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 0, 0, 0, 1, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "neto", name: "Pedro Neto", teamId: "che", position: "MID", price: 6.5,
-    goals: 0, assists: 6, cleanSheets: 1, minutes: 650, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 1, 1, 0, 2, 1, 0], bonusPoints: 7,
-  },
-  {
-    id: "enzo", name: "Enzo Fernández", teamId: "che", position: "MID", price: 6.0,
-    goals: 0, assists: 4, cleanSheets: 1, minutes: 700, yellowCards: 2, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 1, 0, 1, 0, 1, 1, 0], bonusPoints: 4,
-  },
-  {
-    id: "caicedo", name: "Moisés Caicedo", teamId: "che", position: "MID", price: 5.0,
-    goals: 0, assists: 1, cleanSheets: 1, minutes: 600, yellowCards: 2, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
+  p("palmer", "Cole Palmer", "che", "MID", 10.5, [
+    [2,0,90,false,3,0,false,false,3],[2,0,90,false,4,0,false,false,3],[1,0,90,false,2,0,false,false,2],
+    [1,0,90,false,2,0,false,false,2],[0,0,85,false,3,0,false,false,0],[2,0,90,false,1,0,false,false,3],
+    [1,0,90,true,0,0,false,false,2],[0,0,85,false,2,0,false,false,0],
+  ]),
+  p("jackson", "Nicolas Jackson", "che", "FWD", 7.5, [
+    [1,0,85,false,3,0,false,false,2],[1,0,80,false,4,0,false,false,1],[0,0,75,false,2,0,false,false,0],
+    [1,0,85,false,2,0,false,false,2],[0,0,70,false,3,0,false,false,0],[2,0,90,false,1,0,false,false,3],
+    [1,0,85,true,0,0,false,false,2],[0,0,80,false,2,0,false,false,0],
+  ]),
+  p("nkunku", "Christopher Nkunku", "che", "FWD", 7.0, [
+    [1,0,70,false,3,0,false,false,2],[1,0,75,false,4,0,false,false,2],[0,0,60,false,2,0,false,false,0],
+    [0,0,65,false,2,0,false,false,0],[0,0,55,false,3,0,false,false,0],[1,0,80,false,1,0,false,false,2],
+    [0,0,70,true,0,0,false,false,0],[0,0,60,false,2,0,false,false,0],
+  ]),
+  p("neto", "Pedro Neto", "che", "MID", 6.5, [
+    [0,1,85,false,3,0,false,false,1],[0,0,80,false,4,0,false,false,0],[0,1,85,false,2,0,false,false,1],
+    [0,1,85,false,2,0,false,false,1],[0,0,70,false,3,0,false,false,0],[0,2,90,false,1,0,false,false,3],
+    [0,1,85,true,0,0,false,false,2],[0,0,80,false,2,0,false,false,0],
+  ]),
+  p("enzo", "Enzo Fernández", "che", "MID", 6.0, [
+    [0,0,90,false,3,0,false,false,0],[0,1,90,false,4,0,false,false,1],[0,0,85,false,2,0,false,false,0],
+    [0,1,90,false,2,0,false,false,1],[0,0,85,false,3,0,false,false,0],[0,1,90,false,1,0,false,false,1],
+    [0,1,90,true,0,0,false,false,2],[0,0,85,false,2,0,false,false,0],
+  ]),
 
   // === ASTON VILLA ===
-  {
-    id: "watkins", name: "Ollie Watkins", teamId: "avl", position: "FWD", price: 8.5,
-    goals: 6, assists: 0, cleanSheets: 0, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 1, 2, 1, 1, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 8,
-  },
-  {
-    id: "mcginn", name: "John McGinn", teamId: "avl", position: "MID", price: 6.0,
-    goals: 1, assists: 5, cleanSheets: 1, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 1, 0, 0], assistsByGW: [0, 0, 0, 1, 2, 0, 1, 1], bonusPoints: 6,
-  },
-  {
-    id: "rogers", name: "Morgan Rogers", teamId: "avl", position: "MID", price: 5.0,
-    goals: 2, assists: 0, cleanSheets: 1, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 1, 0, 0, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "tielemans", name: "Youri Tielemans", teamId: "avl", position: "MID", price: 5.5,
-    goals: 0, assists: 3, cleanSheets: 1, minutes: 650, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 1, 1, 0, 1], bonusPoints: 3,
-  },
+  p("watkins", "Ollie Watkins", "avl", "FWD", 8.5, [
+    [0,0,90,false,4,0,false,false,0],[0,0,90,false,1,0,false,false,0],[0,0,90,true,0,0,false,false,0],
+    [1,0,90,false,1,0,false,false,2],[2,0,90,false,2,0,false,false,3],[1,0,90,false,2,0,false,false,2],
+    [1,0,90,true,0,0,false,false,2],[1,0,90,false,1,0,false,false,2],
+  ]),
+  p("mcginn", "John McGinn", "avl", "MID", 6.0, [
+    [0,0,90,false,4,0,false,false,0],[0,0,90,false,1,0,false,false,0],[0,0,90,true,0,0,false,false,0],
+    [0,1,90,false,1,0,false,false,1],[0,2,90,false,2,0,false,false,3],[1,0,90,false,2,0,false,false,2],
+    [0,1,90,true,0,0,false,false,2],[0,1,90,false,1,0,false,false,2],
+  ]),
+  p("rogers", "Morgan Rogers", "avl", "MID", 5.0, [
+    [0,0,60,false,4,0,false,false,0],[0,0,55,false,1,0,false,false,0],[0,0,50,true,0,0,false,false,0],
+    [0,0,60,false,1,0,false,false,0],[1,0,75,false,2,0,false,false,2],[0,0,65,false,2,0,false,false,0],
+    [0,0,70,true,0,0,false,false,0],[1,0,80,false,1,0,false,false,2],
+  ]),
+  p("tielemans", "Youri Tielemans", "avl", "MID", 5.5, [
+    [0,0,85,false,4,0,false,false,0],[0,0,85,false,1,0,false,false,0],[0,0,80,true,0,0,false,false,0],
+    [0,0,85,false,1,0,false,false,0],[0,1,85,false,2,0,false,false,1],[0,1,85,false,2,0,false,false,1],
+    [0,0,80,true,0,0,false,false,0],[0,1,85,false,1,0,false,false,1],
+  ]),
 
   // === TOTTENHAM ===
-  {
-    id: "son", name: "Son Heung-min", teamId: "tot", position: "MID", price: 9.5,
-    goals: 4, assists: 1, cleanSheets: 1, minutes: 700, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 1, 0, 2, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 6,
-  },
-  {
-    id: "maddison", name: "James Maddison", teamId: "tot", position: "MID", price: 7.0,
-    goals: 1, assists: 3, cleanSheets: 1, minutes: 600, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 1, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 1, 1], bonusPoints: 4,
-  },
-  {
-    id: "kulusevski", name: "Dejan Kulusevski", teamId: "tot", position: "MID", price: 6.5,
-    goals: 1, assists: 2, cleanSheets: 1, minutes: 550, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 1, 0], assistsByGW: [0, 0, 0, 0, 1, 0, 0, 1], bonusPoints: 3,
-  },
-  {
-    id: "johnson_b", name: "Brennan Johnson", teamId: "tot", position: "MID", price: 5.0,
-    goals: 2, assists: 1, cleanSheets: 1, minutes: 450, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 1, 0, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 1, 0], bonusPoints: 3,
-  },
-  {
-    id: "porro", name: "Pedro Porro", teamId: "tot", position: "DEF", price: 5.5,
-    goals: 0, assists: 2, cleanSheets: 1, minutes: 680, yellowCards: 2, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 1, 0, 1, 0], bonusPoints: 3,
-  },
+  p("son", "Son Heung-min", "tot", "MID", 9.5, [
+    [0,0,90,false,3,0,false,false,0],[0,0,90,false,2,0,false,false,0],[0,0,90,true,0,0,false,false,0],
+    [0,0,90,true,0,0,false,false,0],[1,0,88,false,3,0,false,false,2],[0,1,85,false,1,0,false,false,1],
+    [2,0,90,false,1,0,false,false,3],[1,0,90,true,0,0,false,false,2],
+  ]),
+  p("maddison", "James Maddison", "tot", "MID", 7.0, [
+    [0,0,80,false,3,0,false,false,0],[0,0,75,false,2,0,false,false,0],[0,0,70,true,0,0,false,false,0],
+    [0,0,75,true,0,0,false,false,0],[1,0,85,false,3,0,false,false,2],[0,0,80,false,1,0,false,false,0],
+    [0,1,85,false,1,0,false,false,1],[0,1,88,true,0,0,false,false,2],
+  ]),
+  p("kulusevski", "Dejan Kulusevski", "tot", "MID", 6.5, [
+    [0,0,75,false,3,0,false,false,0],[0,0,70,false,2,0,false,false,0],[0,0,65,true,0,0,false,false,0],
+    [0,0,70,true,0,0,false,false,0],[0,1,80,false,3,0,false,false,1],[0,0,75,false,1,0,false,false,0],
+    [1,0,85,false,1,0,false,false,2],[0,1,88,true,0,0,false,false,2],
+  ]),
+  p("johnson_b", "Brennan Johnson", "tot", "MID", 5.0, [
+    [0,0,60,false,3,0,false,false,0],[0,0,55,false,2,0,false,false,0],[0,0,50,true,0,0,false,false,0],
+    [0,0,55,true,0,0,false,false,0],[0,0,60,false,3,0,false,false,0],[1,0,75,false,1,0,false,false,2],
+    [0,1,80,false,1,0,false,false,1],[1,0,85,true,0,0,false,false,2],
+  ]),
+  p("porro", "Pedro Porro", "tot", "DEF", 5.5, [
+    [0,0,90,false,3,0,false,false,0],[0,0,90,false,2,0,false,false,0],[0,0,90,true,0,0,false,false,1],
+    [0,0,90,true,0,0,false,false,0],[0,1,90,false,3,0,false,false,1],[0,0,90,false,1,0,false,false,0],
+    [0,1,90,false,1,0,false,false,1],[0,0,90,true,0,0,false,false,0],
+  ]),
 
   // === NEWCASTLE ===
-  {
-    id: "isak", name: "Alexander Isak", teamId: "new", position: "FWD", price: 9.0,
-    goals: 5, assists: 0, cleanSheets: 0, minutes: 720, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 1, 1, 0, 1, 0, 0, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 7,
-  },
-  {
-    id: "gordon", name: "Anthony Gordon", teamId: "new", position: "MID", price: 7.0,
-    goals: 4, assists: 2, cleanSheets: 1, minutes: 700, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 1, 0, 1, 0, 0, 1], assistsByGW: [0, 1, 0, 0, 0, 0, 0, 0], bonusPoints: 6,
-  },
-  {
-    id: "bruno_g", name: "Bruno Guimarães", teamId: "new", position: "MID", price: 6.5,
-    goals: 0, assists: 3, cleanSheets: 1, minutes: 720, yellowCards: 2, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 1, 0, 1, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "trippier", name: "Kieran Trippier", teamId: "new", position: "DEF", price: 5.5,
-    goals: 0, assists: 3, cleanSheets: 2, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 1, 0, 1, 0, 0, 1], bonusPoints: 5,
-  },
-  {
-    id: "barnes_h", name: "Harvey Barnes", teamId: "new", position: "MID", price: 5.5,
-    goals: 1, assists: 1, cleanSheets: 1, minutes: 400, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
+  p("isak", "Alexander Isak", "new", "FWD", 9.0, [
+    [1,0,90,false,2,0,false,false,2],[1,0,90,true,0,0,false,false,2],[1,0,90,false,2,0,false,false,2],
+    [1,0,90,false,4,0,false,false,2],[1,0,90,false,1,0,false,false,2],[0,0,85,false,1,0,false,false,0],
+    [0,0,85,false,1,0,false,false,0],[1,0,90,true,0,0,false,false,2],
+  ]),
+  p("gordon", "Anthony Gordon", "new", "MID", 7.0, [
+    [1,0,90,false,2,0,false,false,2],[0,1,90,true,0,0,false,false,1],[1,0,90,false,2,0,false,false,2],
+    [0,1,90,false,4,0,false,false,1],[1,0,90,false,1,0,false,false,2],[0,0,85,false,1,0,false,false,0],
+    [0,0,85,false,1,0,false,false,0],[1,0,90,true,0,0,false,false,2],
+  ]),
+  p("bruno_g", "Bruno Guimarães", "new", "MID", 6.5, [
+    [0,1,90,false,2,0,false,false,1],[0,0,90,true,0,0,false,false,0],[0,1,90,false,2,0,false,false,1],
+    [0,0,90,false,4,0,false,false,0],[0,1,90,false,1,0,false,false,1],[0,0,90,false,1,0,false,false,0],
+    [0,0,90,false,1,0,false,false,0],[0,1,90,true,0,0,false,false,1],
+  ]),
+  p("trippier", "Kieran Trippier", "new", "DEF", 5.5, [
+    [0,0,90,false,2,0,false,false,0],[0,0,90,true,0,0,false,false,1],[0,1,90,false,2,0,false,false,1],
+    [0,0,90,false,4,0,false,false,0],[0,1,90,false,1,0,false,false,1],[0,0,90,false,1,0,false,false,0],
+    [0,0,90,false,1,0,false,false,0],[0,1,90,true,0,0,false,false,2],
+  ]),
 
   // === BRENTFORD ===
-  {
-    id: "mbeumo", name: "Bryan Mbeumo", teamId: "bre", position: "MID", price: 6.5,
-    goals: 8, assists: 1, cleanSheets: 1, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [2, 1, 0, 1, 1, 1, 1, 1], assistsByGW: [0, 0, 1, 0, 0, 0, 0, 0], bonusPoints: 10,
-  },
-  {
-    id: "wissa", name: "Yoane Wissa", teamId: "bre", position: "FWD", price: 6.0,
-    goals: 3, assists: 2, cleanSheets: 0, minutes: 550, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 1, 1, 1, 0, 0, 0], assistsByGW: [1, 0, 0, 0, 0, 1, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "janelt", name: "Vitaly Janelt", teamId: "bre", position: "MID", price: 5.0,
-    goals: 0, assists: 6, cleanSheets: 1, minutes: 680, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 1, 0, 1, 1, 0, 1, 1], bonusPoints: 7,
-  },
-  {
-    id: "schade", name: "Kevin Schade", teamId: "bre", position: "MID", price: 5.0,
-    goals: 4, assists: 1, cleanSheets: 1, minutes: 550, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 1, 1, 1, 0, 0], assistsByGW: [0, 0, 0, 1, 0, 0, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "norgaard", name: "Christian Nørgaard", teamId: "bre", position: "MID", price: 4.5,
-    goals: 0, assists: 2, cleanSheets: 1, minutes: 600, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 1, 1, 0, 0], bonusPoints: 2,
-  },
-  {
-    id: "damsgaard", name: "Mikkel Damsgaard", teamId: "bre", position: "MID", price: 4.5,
-    goals: 0, assists: 2, cleanSheets: 1, minutes: 350, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 0, 1, 0, 0, 0], bonusPoints: 2,
-  },
+  p("mbeumo", "Bryan Mbeumo", "bre", "MID", 6.5, [
+    [2,0,90,true,0,0,false,false,3],[1,0,90,false,1,0,false,false,2],[0,1,85,false,1,0,false,false,1],
+    [1,0,90,false,2,0,false,false,2],[1,0,90,true,0,0,false,false,2],[1,0,90,false,2,0,false,false,2],
+    [1,0,90,false,2,0,false,false,2],[1,0,90,false,1,0,false,false,2],
+  ]),
+  p("wissa", "Yoane Wissa", "bre", "FWD", 6.0, [
+    [0,1,80,true,0,0,false,false,1],[0,0,75,false,1,0,false,false,0],[1,0,85,false,1,0,false,false,2],
+    [1,0,85,false,2,0,false,false,2],[1,0,80,true,0,0,false,false,2],[0,1,85,false,2,0,false,false,1],
+    [0,0,70,false,2,0,false,false,0],[0,0,75,false,1,0,false,false,0],
+  ]),
+  p("janelt", "Vitaly Janelt", "bre", "MID", 5.0, [
+    [0,1,90,true,0,0,false,false,2],[0,1,90,false,1,0,false,false,1],[0,0,85,false,1,0,false,false,0],
+    [0,1,90,false,2,0,false,false,1],[0,1,90,true,0,0,false,false,2],[0,0,85,false,2,0,false,false,0],
+    [0,1,90,false,2,0,false,false,1],[0,1,90,false,1,0,false,false,2],
+  ]),
+  p("schade", "Kevin Schade", "bre", "MID", 5.0, [
+    [1,0,75,true,0,0,false,false,2],[0,0,65,false,1,0,false,false,0],[0,0,60,false,1,0,false,false,0],
+    [0,1,80,false,2,0,false,false,1],[1,0,80,true,0,0,false,false,2],[1,0,85,false,2,0,false,false,2],
+    [0,0,70,false,2,0,false,false,0],[0,0,75,false,1,0,false,false,0],
+  ]),
+  p("norgaard", "Christian Nørgaard", "bre", "MID", 4.5, [
+    [0,0,85,true,0,0,false,false,0],[0,0,80,false,1,0,false,false,0],[0,0,75,false,1,0,false,false,0],
+    [0,0,85,false,2,0,false,false,0],[0,1,80,true,0,0,false,false,1],[0,1,85,false,2,0,false,false,1],
+    [0,0,75,false,2,0,false,false,0],[0,0,80,false,1,0,false,false,0],
+  ]),
+  p("damsgaard", "Mikkel Damsgaard", "bre", "MID", 4.5, [
+    [0,1,65,true,0,0,false,false,1],[0,0,55,false,1,0,false,false,0],[0,0,50,false,1,0,false,false,0],
+    [0,0,60,false,2,0,false,false,0],[0,1,65,true,0,0,false,false,1],[0,0,55,false,2,0,false,false,0],
+    [0,0,50,false,2,0,false,false,0],[0,0,60,false,1,0,false,false,0],
+  ]),
 
   // === LEEDS UNITED ===
-  {
-    id: "dcl", name: "Dominic Calvert-Lewin", teamId: "lee", position: "FWD", price: 6.5,
-    goals: 7, assists: 0, cleanSheets: 0, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 1, 2, 1, 1, 1, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 8,
-  },
-  {
-    id: "ramazani", name: "Largie Ramazani", teamId: "lee", position: "MID", price: 5.0,
-    goals: 0, assists: 5, cleanSheets: 2, minutes: 650, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 2, 0, 1, 1, 0], bonusPoints: 5,
-  },
-  {
-    id: "aaronson", name: "Brenden Aaronson", teamId: "lee", position: "MID", price: 5.0,
-    goals: 1, assists: 1, cleanSheets: 2, minutes: 600, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 1, 0, 0, 0, 0], assistsByGW: [0, 0, 1, 1, 0, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "danjames", name: "Dan James", teamId: "lee", position: "MID", price: 4.5,
-    goals: 1, assists: 1, cleanSheets: 2, minutes: 450, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 1, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 1], bonusPoints: 2,
-  },
-  {
-    id: "piroe", name: "Joel Piroe", teamId: "lee", position: "FWD", price: 4.5,
-    goals: 1, assists: 0, cleanSheets: 0, minutes: 250, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 1,
-  },
+  p("dcl", "Dominic Calvert-Lewin", "lee", "FWD", 6.5, [
+    [1,0,90,true,0,0,false,false,2],[0,0,85,false,1,0,false,false,0],[1,0,90,false,1,0,false,false,2],
+    [2,0,90,false,1,0,false,false,3],[1,0,90,true,0,0,false,false,2],[1,0,90,false,2,0,false,false,2],
+    [1,0,90,false,1,0,false,false,2],[0,0,85,true,0,0,false,false,0],
+  ]),
+  p("ramazani", "Largie Ramazani", "lee", "MID", 5.0, [
+    [0,1,85,true,0,0,false,false,1],[0,0,80,false,1,0,false,false,0],[0,0,75,false,1,0,false,false,0],
+    [0,2,90,false,1,0,false,false,3],[0,0,80,true,0,0,false,false,0],[0,1,85,false,2,0,false,false,1],
+    [0,1,85,false,1,0,false,false,1],[0,0,80,true,0,0,false,false,0],
+  ]),
+  p("aaronson", "Brenden Aaronson", "lee", "MID", 5.0, [
+    [0,0,75,true,0,0,false,false,0],[0,0,70,false,1,0,false,false,0],[0,1,80,false,1,0,false,false,1],
+    [1,1,85,false,1,0,false,false,3],[0,0,70,true,0,0,false,false,0],[0,0,75,false,2,0,false,false,0],
+    [0,0,75,false,1,0,false,false,0],[0,0,70,true,0,0,false,false,0],
+  ]),
 
   // === BOURNEMOUTH ===
-  {
-    id: "semenyo", name: "Antoine Semenyo", teamId: "bou", position: "MID", price: 5.5,
-    goals: 5, assists: 1, cleanSheets: 1, minutes: 680, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 1, 0, 0, 1, 1, 1], assistsByGW: [0, 0, 0, 1, 0, 0, 0, 0], bonusPoints: 6,
-  },
-  {
-    id: "tavernier_m", name: "Marcus Tavernier", teamId: "bou", position: "MID", price: 5.5,
-    goals: 3, assists: 4, cleanSheets: 1, minutes: 700, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 1, 2], assistsByGW: [1, 0, 1, 1, 0, 1, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "evanilson", name: "Evanilson", teamId: "bou", position: "FWD", price: 6.0,
-    goals: 3, assists: 1, cleanSheets: 0, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 1, 1, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 1], bonusPoints: 4,
-  },
-  {
-    id: "kluivert", name: "Justin Kluivert", teamId: "bou", position: "MID", price: 5.0,
-    goals: 1, assists: 2, cleanSheets: 1, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 1, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 1, 1], bonusPoints: 3,
-  },
-  {
-    id: "kerkez", name: "Milos Kerkez", teamId: "bou", position: "DEF", price: 4.5,
-    goals: 0, assists: 1, cleanSheets: 1, minutes: 650, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 1, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
+  p("semenyo", "Antoine Semenyo", "bou", "MID", 5.5, [
+    [1,0,85,false,2,0,false,false,2],[0,0,80,false,1,0,false,false,0],[1,0,85,false,2,0,false,false,2],
+    [0,1,85,false,2,0,false,false,1],[0,0,80,false,1,0,false,false,0],[1,0,85,false,5,0,false,false,2],
+    [1,0,90,true,0,0,false,false,2],[1,0,90,true,0,0,false,false,2],
+  ]),
+  p("tavernier_m", "Marcus Tavernier", "bou", "MID", 5.5, [
+    [0,1,90,false,2,0,false,false,1],[0,0,85,false,1,0,false,false,0],[0,1,90,false,2,0,false,false,1],
+    [0,1,90,false,2,0,false,false,1],[0,0,85,false,1,0,false,false,0],[0,1,90,false,5,0,false,false,1],
+    [1,0,90,true,0,0,false,false,2],[2,0,90,true,0,0,false,false,3],
+  ]),
+  p("evanilson", "Evanilson", "bou", "FWD", 6.0, [
+    [0,0,70,false,2,0,false,false,0],[1,0,80,false,1,0,false,false,2],[1,0,85,false,2,0,false,false,2],
+    [1,0,85,false,2,0,false,false,2],[0,0,75,false,1,0,false,false,0],[0,0,65,false,5,0,false,false,0],
+    [0,0,70,true,0,0,false,false,0],[0,1,85,true,0,0,false,false,1],
+  ]),
+  p("kluivert", "Justin Kluivert", "bou", "MID", 5.0, [
+    [0,0,65,false,2,0,false,false,0],[0,0,60,false,1,0,false,false,0],[0,0,55,false,2,0,false,false,0],
+    [1,0,80,false,2,0,false,false,2],[0,0,65,false,1,0,false,false,0],[0,0,60,false,5,0,false,false,0],
+    [0,1,85,true,0,0,false,false,1],[0,1,80,true,0,0,false,false,1],
+  ]),
 
   // === CRYSTAL PALACE ===
-  {
-    id: "mateta", name: "Jean-Philippe Mateta", teamId: "cry", position: "FWD", price: 6.0,
-    goals: 6, assists: 0, cleanSheets: 0, minutes: 680, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 2, 1, 0, 2, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 7,
-  },
-  {
-    id: "eze", name: "Eberechi Eze", teamId: "cry", position: "MID", price: 6.5,
-    goals: 3, assists: 0, cleanSheets: 0, minutes: 650, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 1, 1, 0, 1, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "kamada", name: "Daichi Kamada", teamId: "cry", position: "MID", price: 5.5,
-    goals: 0, assists: 5, cleanSheets: 0, minutes: 650, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 2, 1, 0, 2, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "mitchell", name: "Tyrick Mitchell", teamId: "cry", position: "DEF", price: 4.5,
-    goals: 0, assists: 2, cleanSheets: 0, minutes: 700, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 1, 0, 0, 0, 1, 0, 0], bonusPoints: 2,
-  },
+  p("mateta", "Jean-Philippe Mateta", "cry", "FWD", 6.0, [
+    [0,0,85,false,2,0,false,false,0],[1,0,90,false,4,0,false,false,2],[2,0,90,false,3,0,false,false,3],
+    [1,0,90,false,3,0,false,false,2],[0,0,80,true,0,0,false,false,0],[2,0,90,false,1,0,false,false,3],
+    [0,0,85,false,5,0,false,false,0],[0,0,80,false,2,0,false,false,0],
+  ]),
+  p("eze", "Eberechi Eze", "cry", "MID", 6.5, [
+    [0,0,85,false,2,0,false,false,0],[0,0,85,false,4,0,false,false,0],[1,0,90,false,3,0,false,false,2],
+    [1,0,90,false,3,0,false,false,2],[0,0,80,true,0,0,false,false,0],[1,0,90,false,1,0,false,false,2],
+    [0,0,80,false,5,0,false,false,0],[0,0,75,false,2,0,false,false,0],
+  ]),
+  p("kamada", "Daichi Kamada", "cry", "MID", 5.5, [
+    [0,0,80,false,2,0,false,false,0],[0,0,80,false,4,0,false,false,0],[0,2,90,false,3,0,false,false,2],
+    [0,1,90,false,3,0,false,false,1],[0,0,75,true,0,0,false,false,0],[0,2,90,false,1,0,false,false,3],
+    [0,0,80,false,5,0,false,false,0],[0,0,75,false,2,0,false,false,0],
+  ]),
+  p("mitchell", "Tyrick Mitchell", "cry", "DEF", 4.5, [
+    [0,0,90,false,2,0,false,false,0],[0,1,90,false,4,0,false,false,1],[0,0,90,false,3,0,false,false,0],
+    [0,0,90,false,3,0,false,false,0],[0,0,90,true,0,0,false,false,1],[0,1,90,false,1,0,false,false,1],
+    [0,0,90,false,5,0,false,false,0],[0,0,90,false,2,0,false,false,0],
+  ]),
 
   // === MANCHESTER UNITED ===
-  {
-    id: "zirkzee", name: "Joshua Zirkzee", teamId: "mun", position: "FWD", price: 6.5,
-    goals: 4, assists: 0, cleanSheets: 0, minutes: 600, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 2, 0, 0, 0, 1, 1, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "rashford", name: "Marcus Rashford", teamId: "mun", position: "MID", price: 7.0,
-    goals: 2, assists: 0, cleanSheets: 1, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 2, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "bruno_f", name: "Bruno Fernandes", teamId: "mun", position: "MID", price: 8.5,
-    goals: 1, assists: 3, cleanSheets: 1, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 1, 0, 0, 1, 0, 0], assistsByGW: [0, 2, 0, 0, 0, 0, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "amad", name: "Amad Diallo", teamId: "mun", position: "MID", price: 5.0,
-    goals: 0, assists: 4, cleanSheets: 1, minutes: 450, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 1, 1, 0, 1, 0, 1, 0], bonusPoints: 4,
-  },
-  {
-    id: "garnacho", name: "Alejandro Garnacho", teamId: "mun", position: "MID", price: 6.0,
-    goals: 1, assists: 0, cleanSheets: 1, minutes: 350, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
+  p("zirkzee", "Joshua Zirkzee", "mun", "FWD", 6.5, [
+    [0,0,75,false,2,0,false,false,0],[2,0,85,false,2,0,false,false,3],[1,0,80,false,2,0,false,false,2],
+    [0,0,70,false,1,0,false,false,0],[0,0,75,false,1,0,false,false,0],[1,0,85,false,1,0,false,false,2],
+    [1,0,85,false,1,0,false,false,2],[0,0,80,false,3,0,false,false,0],
+  ]),
+  p("rashford", "Marcus Rashford", "mun", "MID", 7.0, [
+    [0,0,70,false,2,0,false,false,0],[2,0,85,false,2,0,false,false,3],[0,0,75,false,2,0,false,false,0],
+    [0,0,65,false,1,0,false,false,0],[0,0,70,false,1,0,false,false,0],[0,0,75,false,1,0,false,false,0],
+    [0,0,70,false,1,0,false,false,0],[0,0,75,false,3,0,false,false,0],
+  ]),
+  p("bruno_f", "Bruno Fernandes", "mun", "MID", 8.5, [
+    [0,0,90,false,2,0,false,false,0],[0,2,90,false,2,0,false,false,3],[1,0,90,false,2,0,false,false,2],
+    [0,0,85,false,1,0,false,false,0],[0,0,85,false,1,0,false,false,0],[0,1,90,false,1,0,false,false,1],
+    [0,0,85,false,1,0,false,false,0],[0,0,90,false,3,0,false,false,0],
+  ]),
+  p("amad", "Amad Diallo", "mun", "MID", 5.0, [
+    [0,0,60,false,2,0,false,false,0],[0,1,70,false,2,0,false,false,1],[0,1,75,false,2,0,false,false,1],
+    [0,0,65,false,1,0,false,false,0],[0,1,70,false,1,0,false,false,1],[0,0,65,false,1,0,false,false,0],
+    [0,1,75,false,1,0,false,false,1],[0,0,70,false,3,0,false,false,0],
+  ]),
 
   // === HULL CITY ===
-  {
-    id: "philogene", name: "Jaden Philogene", teamId: "hul", position: "MID", price: 6.0,
-    goals: 5, assists: 1, cleanSheets: 1, minutes: 700, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 1, 1, 1, 0, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 6,
-  },
-  {
-    id: "estupinan_o", name: "Óscar Estupiñán", teamId: "hul", position: "FWD", price: 5.5,
-    goals: 2, assists: 0, cleanSheets: 0, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 0, 0, 1, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "slater", name: "Regan Slater", teamId: "hul", position: "MID", price: 4.5,
-    goals: 0, assists: 4, cleanSheets: 1, minutes: 680, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 1, 0, 1, 0, 1], bonusPoints: 4,
-  },
-  {
-    id: "palmer_k", name: "Kasey Palmer", teamId: "hul", position: "MID", price: 4.5,
-    goals: 0, assists: 2, cleanSheets: 1, minutes: 550, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 0, 0, 1, 0, 0], bonusPoints: 2,
-  },
+  p("philogene", "Jaden Philogene", "hul", "MID", 6.0, [
+    [1,0,88,true,0,0,false,false,2],[0,1,85,true,0,0,false,false,1],[0,0,80,true,0,0,false,false,0],
+    [1,0,85,false,2,0,false,false,2],[1,0,85,false,2,0,false,false,2],[1,0,90,false,2,0,false,false,2],
+    [0,0,80,false,1,0,false,false,0],[1,0,85,false,1,0,false,false,2],
+  ]),
+  p("estupinan_o", "Óscar Estupiñán", "hul", "FWD", 5.5, [
+    [1,0,75,true,0,0,false,false,2],[0,0,70,true,0,0,false,false,0],[0,0,65,true,0,0,false,false,0],
+    [0,0,70,false,2,0,false,false,0],[0,0,65,false,2,0,false,false,0],[1,0,80,false,2,0,false,false,2],
+    [0,0,65,false,1,0,false,false,0],[0,0,70,false,1,0,false,false,0],
+  ]),
+  p("slater", "Regan Slater", "hul", "MID", 4.5, [
+    [0,1,88,true,0,0,false,false,1],[0,0,85,true,0,0,false,false,0],[0,0,80,true,0,0,false,false,0],
+    [0,1,85,false,2,0,false,false,1],[0,1,85,false,2,0,false,false,1],[0,1,90,false,2,0,false,false,1],
+    [0,0,80,false,1,0,false,false,0],[0,1,85,false,1,0,false,false,1],
+  ]),
 
   // === EVERTON ===
-  {
-    id: "mcneil", name: "Dwight McNeil", teamId: "eve", position: "MID", price: 5.5,
-    goals: 3, assists: 3, cleanSheets: 2, minutes: 700, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [1, 1, 0, 0, 0, 1, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "beto", name: "Beto", teamId: "eve", position: "FWD", price: 5.0,
-    goals: 2, assists: 0, cleanSheets: 0, minutes: 400, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 1, 0, 0, 1, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
-  {
-    id: "harrison_j", name: "Jack Harrison", teamId: "eve", position: "MID", price: 4.5,
-    goals: 0, assists: 3, cleanSheets: 2, minutes: 600, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 1, 0, 0, 0, 1, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "tarkowski", name: "James Tarkowski", teamId: "eve", position: "DEF", price: 4.5,
-    goals: 0, assists: 3, cleanSheets: 3, minutes: 720, yellowCards: 2, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 1, 0, 0, 1, 0, 0], bonusPoints: 5,
-  },
+  p("mcneil", "Dwight McNeil", "eve", "MID", 5.5, [
+    [1,0,88,true,0,0,false,false,2],[1,0,85,false,1,0,false,false,2],[1,1,90,false,2,0,false,false,3],
+    [0,0,85,true,0,0,false,false,0],[0,1,85,true,0,0,false,false,1],[1,0,90,false,2,0,false,false,2],
+    [0,0,80,false,2,0,false,false,0],[0,0,80,false,2,0,false,false,0],
+  ]),
+  p("beto", "Beto", "eve", "FWD", 5.0, [
+    [0,0,65,true,0,0,false,false,0],[0,0,60,false,1,0,false,false,0],[1,0,75,false,2,0,false,false,2],
+    [0,0,60,true,0,0,false,false,0],[0,0,55,true,0,0,false,false,0],[1,0,80,false,2,0,false,false,2],
+    [0,0,65,false,2,0,false,false,0],[0,0,60,false,2,0,false,false,0],
+  ]),
+  p("harrison_j", "Jack Harrison", "eve", "MID", 4.5, [
+    [0,1,85,true,0,0,false,false,1],[0,1,80,false,1,0,false,false,1],[0,0,75,false,2,0,false,false,0],
+    [0,0,70,true,0,0,false,false,0],[0,0,65,true,0,0,false,false,0],[0,1,85,false,2,0,false,false,1],
+    [0,0,70,false,2,0,false,false,0],[0,0,70,false,2,0,false,false,0],
+  ]),
+  p("tarkowski", "James Tarkowski", "eve", "DEF", 4.5, [
+    [0,1,90,true,0,0,false,false,2],[0,0,90,false,1,0,false,false,0],[0,1,90,false,2,0,false,false,1],
+    [0,0,90,true,0,0,false,false,1],[0,0,90,true,0,0,false,false,0],[0,1,90,false,2,0,false,false,1],
+    [0,0,90,false,2,0,false,false,0],[0,0,90,false,2,0,false,false,0],
+  ]),
 
   // === IPSWICH TOWN ===
-  {
-    id: "delap", name: "Liam Delap", teamId: "ips", position: "FWD", price: 5.5,
-    goals: 6, assists: 0, cleanSheets: 0, minutes: 680, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 2, 0, 1, 1, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 7,
-  },
-  {
-    id: "hutchinson", name: "Omari Hutchinson", teamId: "ips", position: "MID", price: 5.0,
-    goals: 3, assists: 1, cleanSheets: 0, minutes: 600, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 0, 0, 1, 1, 0], assistsByGW: [0, 0, 0, 1, 0, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "davis_l", name: "Leif Davis", teamId: "ips", position: "DEF", price: 5.0,
-    goals: 0, assists: 6, cleanSheets: 0, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 2, 0, 1, 1, 1], bonusPoints: 7,
-  },
-  {
-    id: "chaplin", name: "Conor Chaplin", teamId: "ips", position: "MID", price: 5.0,
-    goals: 0, assists: 3, cleanSheets: 0, minutes: 550, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 1, 1, 0], bonusPoints: 3,
-  },
-  {
-    id: "szmodics", name: "Sammie Szmodics", teamId: "ips", position: "MID", price: 4.5,
-    goals: 1, assists: 0, cleanSheets: 0, minutes: 350, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 1, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 1,
-  },
+  p("delap", "Liam Delap", "ips", "FWD", 5.5, [
+    [1,0,88,false,1,0,false,false,2],[1,0,85,false,5,0,false,false,2],[0,0,80,false,2,0,false,false,0],
+    [2,0,90,false,3,0,false,false,3],[0,0,75,false,1,0,false,false,0],[1,0,85,false,1,0,false,false,2],
+    [1,0,85,false,3,0,false,false,2],[1,0,90,false,1,0,false,false,2],
+  ]),
+  p("hutchinson", "Omari Hutchinson", "ips", "MID", 5.0, [
+    [1,0,85,false,1,0,false,false,2],[1,0,80,false,5,0,false,false,2],[0,0,75,false,2,0,false,false,0],
+    [0,1,85,false,3,0,false,false,1],[0,0,70,false,1,0,false,false,0],[1,0,85,false,1,0,false,false,2],
+    [1,0,85,false,3,0,false,false,2],[0,0,80,false,1,0,false,false,0],
+  ]),
+  p("davis_l", "Leif Davis", "ips", "DEF", 5.0, [
+    [0,1,90,false,1,0,false,false,1],[0,0,90,false,5,0,false,false,0],[0,0,90,false,2,0,false,false,0],
+    [0,2,90,false,3,0,false,false,3],[0,0,85,false,1,0,false,false,0],[0,1,90,false,1,0,false,false,1],
+    [0,1,90,false,3,0,false,false,1],[0,1,90,false,1,0,false,false,2],
+  ]),
+  p("chaplin", "Conor Chaplin", "ips", "MID", 5.0, [
+    [0,1,80,false,1,0,false,false,1],[0,0,75,false,5,0,false,false,0],[0,0,70,false,2,0,false,false,0],
+    [0,0,80,false,3,0,false,false,0],[0,0,65,false,1,0,false,false,0],[0,1,85,false,1,0,false,false,1],
+    [0,1,80,false,3,0,false,false,1],[0,0,75,false,1,0,false,false,0],
+  ]),
 
   // === FULHAM ===
-  {
-    id: "muniz", name: "Rodrigo Muniz", teamId: "ful", position: "FWD", price: 5.5,
-    goals: 5, assists: 0, cleanSheets: 0, minutes: 650, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 1, 0, 1, 0, 1, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 6,
-  },
-  {
-    id: "smithrowe", name: "Emile Smith Rowe", teamId: "ful", position: "MID", price: 5.5,
-    goals: 1, assists: 0, cleanSheets: 0, minutes: 400, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
-  {
-    id: "robinson_a", name: "Antonee Robinson", teamId: "ful", position: "DEF", price: 5.0,
-    goals: 0, assists: 4, cleanSheets: 1, minutes: 720, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 1, 0, 1, 1, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "iwobi", name: "Alex Iwobi", teamId: "ful", position: "MID", price: 5.5,
-    goals: 0, assists: 1, cleanSheets: 0, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
-  {
-    id: "pereira", name: "Andreas Pereira", teamId: "ful", position: "MID", price: 6.0,
-    goals: 0, assists: 3, cleanSheets: 0, minutes: 650, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 1, 0, 0, 0, 1, 1], bonusPoints: 3,
-  },
-  {
-    id: "traore", name: "Adama Traoré", teamId: "ful", position: "MID", price: 4.5,
-    goals: 1, assists: 0, cleanSheets: 0, minutes: 300, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 1, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 1,
-  },
+  p("muniz", "Rodrigo Muniz", "ful", "FWD", 5.5, [
+    [1,0,85,false,3,0,false,false,2],[0,0,75,false,1,0,false,false,0],[1,0,85,false,3,0,false,false,2],
+    [0,0,80,true,0,0,false,false,0],[1,0,80,false,1,0,false,false,2],[0,0,75,false,2,0,false,false,0],
+    [1,0,85,true,0,0,false,false,2],[1,0,80,true,0,0,false,false,2],
+  ]),
+  p("smithrowe", "Emile Smith Rowe", "ful", "MID", 5.5, [
+    [1,0,75,false,3,0,false,false,2],[0,0,65,false,1,0,false,false,0],[0,0,70,false,3,0,false,false,0],
+    [0,0,65,true,0,0,false,false,0],[0,0,60,false,1,0,false,false,0],[0,0,65,false,2,0,false,false,0],
+    [0,0,70,true,0,0,false,false,0],[0,0,65,true,0,0,false,false,0],
+  ]),
+  p("robinson_a", "Antonee Robinson", "ful", "DEF", 5.0, [
+    [0,1,90,false,3,0,false,false,1],[0,0,85,false,1,0,false,false,0],[0,1,90,false,3,0,false,false,1],
+    [0,0,90,true,0,0,false,false,1],[0,1,85,false,1,0,false,false,1],[0,1,90,false,2,0,false,false,1],
+    [0,0,90,true,0,0,false,false,0],[0,0,90,true,0,0,false,false,0],
+  ]),
+  p("pereira", "Andreas Pereira", "ful", "MID", 6.0, [
+    [0,0,85,false,3,0,false,false,0],[0,0,80,false,1,0,false,false,0],[0,1,85,false,3,0,false,false,1],
+    [0,0,80,true,0,0,false,false,0],[0,0,75,false,1,0,false,false,0],[0,0,80,false,2,0,false,false,0],
+    [0,1,85,true,0,0,false,false,1],[0,1,85,true,0,0,false,false,1],
+  ]),
 
   // === SUNDERLAND ===
-  {
-    id: "isidor", name: "Wilson Isidor", teamId: "sun", position: "FWD", price: 5.0,
-    goals: 3, assists: 0, cleanSheets: 0, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [1, 0, 0, 0, 2, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "roberts_p", name: "Patrick Roberts", teamId: "sun", position: "MID", price: 4.5,
-    goals: 1, assists: 3, cleanSheets: 0, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 1, 0, 0, 0], assistsByGW: [0, 1, 1, 0, 1, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "rigg", name: "Chris Rigg", teamId: "sun", position: "MID", price: 4.5,
-    goals: 0, assists: 2, cleanSheets: 0, minutes: 450, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [1, 0, 0, 0, 1, 0, 0, 0], bonusPoints: 2,
-  },
+  p("isidor", "Wilson Isidor", "sun", "FWD", 5.0, [
+    [1,0,80,false,2,0,false,false,2],[0,0,70,true,0,0,false,false,0],[0,0,65,false,1,0,false,false,0],
+    [0,0,65,false,2,0,false,false,0],[2,0,85,false,5,0,false,false,3],[0,0,60,false,2,0,false,false,0],
+    [0,0,65,false,2,0,false,false,0],[0,0,70,true,0,0,false,false,0],
+  ]),
+  p("roberts_p", "Patrick Roberts", "sun", "MID", 4.5, [
+    [0,0,70,false,2,0,false,false,0],[0,1,75,true,0,0,false,false,1],[0,1,80,false,1,0,false,false,1],
+    [0,0,65,false,2,0,false,false,0],[1,0,80,false,5,0,false,false,2],[0,0,60,false,2,0,false,false,0],
+    [0,0,65,false,2,0,false,false,0],[0,0,70,true,0,0,false,false,0],
+  ]),
+  p("rigg", "Chris Rigg", "sun", "MID", 4.5, [
+    [0,1,75,false,2,0,false,false,1],[0,0,70,true,0,0,false,false,0],[0,0,65,false,1,0,false,false,0],
+    [0,0,60,false,2,0,false,false,0],[0,1,75,false,5,0,false,false,1],[0,0,55,false,2,0,false,false,0],
+    [0,0,60,false,2,0,false,false,0],[0,0,65,true,0,0,false,false,0],
+  ]),
 
   // === NOTTINGHAM FOREST ===
-  {
-    id: "wood", name: "Chris Wood", teamId: "nfo", position: "FWD", price: 6.0,
-    goals: 4, assists: 0, cleanSheets: 0, minutes: 650, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 0, 1, 0, 1, 0, 1], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "gibbswhite", name: "Morgan Gibbs-White", teamId: "nfo", position: "MID", price: 6.5,
-    goals: 0, assists: 3, cleanSheets: 0, minutes: 680, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 1, 0, 1, 0, 1, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "elanga", name: "Anthony Elanga", teamId: "nfo", position: "MID", price: 5.5,
-    goals: 1, assists: 3, cleanSheets: 0, minutes: 600, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 1, 0, 1, 0, 0, 0, 0], assistsByGW: [0, 1, 0, 0, 0, 0, 0, 1], bonusPoints: 4,
-  },
-  {
-    id: "joseph", name: "Mateo Joseph", teamId: "lee", position: "FWD", price: 4.5,
-    goals: 1, assists: 0, cleanSheets: 0, minutes: 200, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 1,
-  },
+  p("wood", "Chris Wood", "nfo", "FWD", 6.0, [
+    [0,0,85,false,1,0,false,false,0],[1,0,85,false,2,0,false,false,2],[0,0,80,true,0,0,false,false,0],
+    [1,0,90,false,1,0,false,false,2],[0,0,75,false,1,0,false,false,0],[1,0,85,false,3,0,false,false,2],
+    [0,0,80,false,1,0,false,false,0],[1,0,85,false,1,0,false,false,2],
+  ]),
+  p("gibbswhite", "Morgan Gibbs-White", "nfo", "MID", 6.5, [
+    [0,0,85,false,1,0,false,false,0],[0,1,85,false,2,0,false,false,1],[0,0,80,true,0,0,false,false,0],
+    [0,1,90,false,1,0,false,false,1],[0,0,75,false,1,0,false,false,0],[0,1,85,false,3,0,false,false,1],
+    [0,0,80,false,1,0,false,false,0],[0,0,80,false,1,0,false,false,0],
+  ]),
+  p("elanga", "Anthony Elanga", "nfo", "MID", 5.5, [
+    [0,0,80,false,1,0,false,false,0],[1,1,85,false,2,0,false,false,3],[0,0,75,true,0,0,false,false,0],
+    [0,1,85,false,1,0,false,false,1],[0,0,70,false,1,0,false,false,0],[0,0,75,false,3,0,false,false,0],
+    [0,0,75,false,1,0,false,false,0],[0,1,85,false,1,0,false,false,1],
+  ]),
 
   // === COVENTRY CITY ===
-  {
-    id: "wright", name: "Haji Wright", teamId: "cov", position: "FWD", price: 5.5,
-    goals: 4, assists: 0, cleanSheets: 0, minutes: 600, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 1, 2, 1, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 5,
-  },
-  {
-    id: "sakamoto", name: "Tatsuhiro Sakamoto", teamId: "cov", position: "MID", price: 4.5,
-    goals: 1, assists: 2, cleanSheets: 0, minutes: 500, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 1, 0, 0], assistsByGW: [0, 0, 0, 0, 1, 0, 0, 0], bonusPoints: 2,
-  },
-  {
-    id: "simms", name: "Ellis Simms", teamId: "cov", position: "FWD", price: 4.5,
-    goals: 1, assists: 0, cleanSheets: 0, minutes: 250, yellowCards: 0, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 1, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 1,
-  },
-  {
-    id: "sheaf", name: "Ben Sheaf", teamId: "cov", position: "MID", price: 4.0,
-    goals: 0, assists: 1, cleanSheets: 0, minutes: 500, yellowCards: 1, redCards: 0, saves: 0,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 1, 0, 0], bonusPoints: 1,
-  },
+  p("wright", "Haji Wright", "cov", "FWD", 5.5, [
+    [0,0,80,false,3,0,false,false,0],[0,0,75,false,1,0,false,false,0],[0,0,70,false,1,0,false,false,0],
+    [0,0,70,false,5,0,false,false,0],[1,0,80,true,0,0,false,false,2],[2,0,85,false,1,0,false,false,3],
+    [1,0,85,false,3,0,false,false,2],[0,0,75,false,1,0,false,false,0],
+  ]),
+  p("sakamoto", "Tatsuhiro Sakamoto", "cov", "MID", 4.5, [
+    [0,0,70,false,3,0,false,false,0],[0,0,65,false,1,0,false,false,0],[0,0,60,false,1,0,false,false,0],
+    [0,0,60,false,5,0,false,false,0],[0,1,75,true,0,0,false,false,1],[1,0,80,false,1,0,false,false,2],
+    [0,0,75,false,3,0,false,false,0],[0,0,70,false,1,0,false,false,0],
+  ]),
 
   // === GOALKEEPERS ===
-  {
-    id: "raya", name: "David Raya", teamId: "ars", position: "GK", price: 5.5,
-    goals: 0, assists: 0, cleanSheets: 5, minutes: 720, yellowCards: 0, redCards: 0, saves: 22,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 6,
-  },
-  {
-    id: "ederson", name: "Ederson", teamId: "mci", position: "GK", price: 5.5,
-    goals: 0, assists: 0, cleanSheets: 3, minutes: 720, yellowCards: 0, redCards: 0, saves: 18,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "verbruggen", name: "Bart Verbruggen", teamId: "bri", position: "GK", price: 4.5,
-    goals: 0, assists: 0, cleanSheets: 3, minutes: 720, yellowCards: 0, redCards: 0, saves: 15,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "alisson", name: "Alisson", teamId: "liv", position: "GK", price: 5.0,
-    goals: 0, assists: 0, cleanSheets: 3, minutes: 720, yellowCards: 0, redCards: 0, saves: 16,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "sanchez", name: "Robert Sánchez", teamId: "che", position: "GK", price: 4.5,
-    goals: 0, assists: 0, cleanSheets: 1, minutes: 720, yellowCards: 0, redCards: 0, saves: 28,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
-  {
-    id: "flekken", name: "Mark Flekken", teamId: "bre", position: "GK", price: 4.5,
-    goals: 0, assists: 0, cleanSheets: 2, minutes: 720, yellowCards: 0, redCards: 0, saves: 20,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "pickford", name: "Jordan Pickford", teamId: "eve", position: "GK", price: 4.5,
-    goals: 0, assists: 0, cleanSheets: 3, minutes: 720, yellowCards: 0, redCards: 0, saves: 24,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 4,
-  },
-  {
-    id: "muric", name: "Arijanet Muric", teamId: "nfo", position: "GK", price: 4.0,
-    goals: 0, assists: 0, cleanSheets: 2, minutes: 720, yellowCards: 0, redCards: 0, saves: 26,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 3,
-  },
-  {
-    id: "onana", name: "André Onana", teamId: "mun", position: "GK", price: 4.5,
-    goals: 0, assists: 0, cleanSheets: 1, minutes: 720, yellowCards: 0, redCards: 0, saves: 30,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 2,
-  },
-  {
-    id: "pope", name: "Alex Palmer", teamId: "sun", position: "GK", price: 4.0,
-    goals: 0, assists: 0, cleanSheets: 2, minutes: 720, yellowCards: 0, redCards: 0, saves: 32,
-    goalsByGW: [0, 0, 0, 0, 0, 0, 0, 0], assistsByGW: [0, 0, 0, 0, 0, 0, 0, 0], bonusPoints: 3,
-  },
+  p("raya", "David Raya", "ars", "GK", 5.5, [
+    [0,0,90,true,0,0,false,false,1],[0,0,90,true,0,1,false,false,1],[0,0,90,false,1,3,false,false,0],
+    [0,0,90,true,0,2,false,false,1],[0,0,90,false,3,4,false,false,0],[0,0,90,false,1,3,false,false,0],
+    [0,0,90,true,0,1,false,false,1],[0,0,90,true,0,1,false,false,1],
+  ]),
+  p("ederson", "Ederson", "mci", "GK", 5.5, [
+    [0,0,90,false,1,2,false,false,0],[0,0,90,false,1,1,false,false,0],[0,0,90,true,0,1,false,false,1],
+    [0,0,90,true,0,0,false,false,1],[0,0,90,false,3,3,false,false,0],[0,0,90,true,0,1,false,false,1],
+    [0,0,90,false,2,2,false,false,0],[0,0,90,false,1,2,false,false,0],
+  ]),
+  p("verbruggen", "Bart Verbruggen", "bri", "GK", 4.5, [
+    [0,0,90,true,0,1,false,false,1],[0,0,90,false,3,4,false,false,0],[0,0,90,false,1,2,false,false,0],
+    [0,0,90,true,0,0,false,false,1],[0,0,90,true,0,1,false,false,1],[0,0,90,true,0,0,false,false,1],
+    [0,0,90,true,0,0,false,false,1],[0,0,90,false,2,3,false,false,0],
+  ]),
+  p("alisson", "Alisson", "liv", "GK", 5.0, [
+    [0,0,90,false,2,3,false,false,0],[0,0,90,false,2,2,false,false,0],[0,0,90,true,0,1,false,false,1],
+    [0,0,90,true,0,0,false,false,1],[0,0,90,true,0,1,false,false,1],[0,0,90,false,3,4,false,false,0],
+    [0,0,90,false,1,2,false,false,0],[0,0,90,true,0,1,false,false,1],
+  ]),
+  p("sanchez", "Robert Sánchez", "che", "GK", 4.5, [
+    [0,0,90,false,3,4,false,false,0],[0,0,90,false,4,5,false,false,0],[0,0,90,false,2,3,false,false,0],
+    [0,0,90,false,2,3,false,false,0],[0,0,90,false,3,4,false,false,0],[0,0,90,false,1,2,false,false,0],
+    [0,0,90,true,0,1,false,false,1],[0,0,90,false,2,3,false,false,0],
+  ]),
+  p("flekken", "Mark Flekken", "bre", "GK", 4.5, [
+    [0,0,90,true,0,1,false,false,1],[0,0,90,false,1,2,false,false,0],[0,0,90,false,1,2,false,false,0],
+    [0,0,90,false,2,3,false,false,0],[0,0,90,true,0,0,false,false,1],[0,0,90,false,2,3,false,false,0],
+    [0,0,90,false,2,2,false,false,0],[0,0,90,false,1,2,false,false,0],
+  ]),
+  p("pickford", "Jordan Pickford", "eve", "GK", 4.5, [
+    [0,0,90,true,0,2,false,false,1],[0,0,90,false,1,3,false,false,0],[0,0,90,false,2,3,false,false,0],
+    [0,0,90,true,0,1,false,false,1],[0,0,90,true,0,1,false,false,1],[0,0,90,false,2,3,false,false,0],
+    [0,0,90,false,2,4,false,false,0],[0,0,90,false,2,3,false,false,0],
+  ]),
+  p("onana", "André Onana", "mun", "GK", 4.5, [
+    [0,0,90,false,2,3,false,false,0],[0,0,90,false,2,3,false,false,0],[0,0,90,false,2,3,false,false,0],
+    [0,0,90,false,1,2,false,false,0],[0,0,90,false,1,2,false,false,0],[0,0,90,false,1,2,false,false,0],
+    [0,0,90,false,1,2,false,false,0],[0,0,90,false,3,5,false,false,0],
+  ]),
+  p("palmer_gk", "Alex Palmer", "sun", "GK", 4.0, [
+    [0,0,90,false,2,4,false,false,0],[0,0,90,true,0,1,false,false,1],[0,0,90,false,1,3,false,false,0],
+    [0,0,90,false,2,3,false,false,0],[0,0,90,false,5,6,false,false,0],[0,0,90,false,2,3,false,false,0],
+    [0,0,90,false,2,4,false,false,0],[0,0,90,true,0,1,false,false,1],
+  ]),
 ];
 
-// Calculate FPL points for each player
-export function getFPLPoints(player: Player): number {
-  return calculateFPLPoints(player);
+// Get players sorted by total FPL points
+export function getPlayersByFPL(position?: Position): Player[] {
+  const filtered = position ? players.filter(p => p.position === position) : [...players];
+  return filtered.sort((a, b) => getTotalFPLPoints(b) - getTotalFPLPoints(a));
 }
 
-export function getPlayerGWPoints(player: Player, gw: number): number {
-  const idx = gw - 1;
-  let pts = 0;
-  
-  // Minutes (assume 2pts per game started)
-  pts += 2;
-  
-  // Goals
-  const goalValue = player.position === "FWD" ? 4 : player.position === "MID" ? 5 : 6;
-  pts += (player.goalsByGW[idx] || 0) * goalValue;
-  
-  // Assists
-  pts += (player.assistsByGW[idx] || 0) * 3;
-  
-  // Bonus (distribute roughly)
-  if (player.goalsByGW[idx] > 0 || player.assistsByGW[idx] > 0) {
-    pts += Math.round(player.bonusPoints / 8);
-  }
-  
-  return pts;
+export function getTopScorers(limit = 10): Player[] {
+  return [...players].sort((a, b) => b.totalGoals - a.totalGoals).slice(0, limit);
 }
 
-// Get all players sorted by FPL points
-export function getTopPlayers(position?: Position, limit?: number): Player[] {
-  let filtered = position ? players.filter(p => p.position === position) : [...players];
-  filtered.sort((a, b) => getFPLPoints(b) - getFPLPoints(a));
-  return limit ? filtered.slice(0, limit) : filtered;
+export function getTopAssisters(limit = 10): Player[] {
+  return [...players].sort((a, b) => b.totalAssists - a.totalAssists).slice(0, limit);
 }
 
-// Get top scorers
-export function getTopScorers(limit?: number): Player[] {
-  const sorted = [...players].sort((a, b) => b.goals - a.goals);
-  return limit ? sorted.slice(0, limit) : sorted;
+export function getBestValue(limit = 10): Player[] {
+  return [...players].sort((a, b) => 
+    (getTotalFPLPoints(b) / b.price) - (getTotalFPLPoints(a) / a.price)
+  ).slice(0, limit);
 }
 
-// Get top assisters
-export function getTopAssisters(limit?: number): Player[] {
-  const sorted = [...players].sort((a, b) => b.assists - a.assists);
-  return limit ? sorted.slice(0, limit) : sorted;
-}
-
-// Get best value picks (points per million)
-export function getBestValue(position?: Position, limit?: number): Player[] {
-  let filtered = position ? players.filter(p => p.position === position) : [...players];
-  filtered.sort((a, b) => (getFPLPoints(b) / b.price) - (getFPLPoints(a) / a.price));
-  return limit ? filtered.slice(0, limit) : filtered;
-}
-
-// Get differentials (low ownership, high potential - players priced 4.5-6.5 with good returns)
-export function getDifferentials(limit?: number): Player[] {
-  const filtered = players.filter(p => p.price >= 4.5 && p.price <= 6.5 && getFPLPoints(p) > 30);
-  filtered.sort((a, b) => getFPLPoints(b) - getFPLPoints(a));
-  return limit ? filtered.slice(0, limit) : filtered;
-}
-
-// Get form players (best last 3 GWs)
-export function getInFormPlayers(position?: Position, limit?: number): Player[] {
-  let filtered = position ? players.filter(p => p.position === position) : [...players];
-  filtered.sort((a, b) => {
-    const formA = (a.goalsByGW.slice(5).reduce((s, g) => s + g, 0) * 4) + (a.assistsByGW.slice(5).reduce((s, a) => s + a, 0) * 3);
-    const formB = (b.goalsByGW.slice(5).reduce((s, g) => s + g, 0) * 4) + (b.assistsByGW.slice(5).reduce((s, a) => s + a, 0) * 3);
+export function getInFormPlayers(limit = 10): Player[] {
+  return [...players].sort((a, b) => {
+    const formA = [6,7,8].reduce((s, gw) => s + calculateGWPoints(a, gw).total, 0);
+    const formB = [6,7,8].reduce((s, gw) => s + calculateGWPoints(b, gw).total, 0);
     return formB - formA;
-  });
-  return limit ? filtered.slice(0, limit) : filtered;
+  }).slice(0, limit);
+}
+
+export function getDifferentials(limit = 10): Player[] {
+  return players
+    .filter(p => p.price >= 4.5 && p.price <= 6.5 && getTotalFPLPoints(p) > 30)
+    .sort((a, b) => (getTotalFPLPoints(b) / b.price) - (getTotalFPLPoints(a) / a.price))
+    .slice(0, limit);
 }

@@ -11,6 +11,8 @@ import {
   GWPointsBreakdown,
   FPLTeamBuilder,
   FPLStatsOverview,
+  PlayerDetailCard,
+  FPLScoringRules,
 } from "./components/FantasyComponents";
 
 // GW8 Results
@@ -842,20 +844,24 @@ function FPLTab() {
   return (
     <>
       <FPLStatsOverview />
-      <FPLTeamBuilder />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <FPLTeamBuilder />
+        <PlayerDetailCard />
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <TopScorers />
         <TopAssisters />
       </div>
       <FPLLeaderboard />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <GWPointsBreakdown />
+        <InFormPlayers />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <ValuePicks />
         <DifferentialPicks />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <InFormPlayers />
-        <GWPointsBreakdown />
-      </div>
+      <FPLScoringRules />
     </>
   );
 }
