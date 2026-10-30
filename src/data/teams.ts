@@ -347,14 +347,14 @@ export interface Fixture {
 
 // Gameweek 9 fixtures (projected matchups)
 export const upcomingFixtures: Fixture[] = [
-  { homeTeam: "liv", awayTeam: "mci", week: 9 },
-  { homeTeam: "bri", awayTeam: "ars", week: 9 },
-  { homeTeam: "che", awayTeam: "new", week: 9 },
-  { homeTeam: "lee", awayTeam: "bre", week: 9 },
-  { homeTeam: "avl", awayTeam: "tot", week: 9 },
-  { homeTeam: "eve", awayTeam: "bou", week: 9 },
-  { homeTeam: "ips", awayTeam: "hul", week: 9 },
-  { homeTeam: "mun", awayTeam: "cry", week: 9 },
-  { homeTeam: "ful", awayTeam: "nfo", week: 9 },
-  { homeTeam: "sun", awayTeam: "cov", week: 9 },
+  { homeTeam: "che", awayTeam: "mun", week: 9 },
+  { homeTeam: "bou", awayTeam: "lee", week: 9 },
+  { homeTeam: "bre", awayTeam: "nfo", week: 9 },
+  { homeTeam: "cov", awayTeam: "sun", week: 9 },
+  { homeTeam: "hul", awayTeam: "ips", week: 9 },
+  { homeTeam: "mci", awayTeam: "bri", week: 9 },
+  { homeTeam: "tot", awayTeam: "cry", week: 9 },
+  { homeTeam: "avl", awayTeam: "ful", week: 9 },
+  { homeTeam: "liv", awayTeam: "ars", week: 9 },
+  { homeTeam: "new", awayTeam: "eve", week: 9 },
 ];
