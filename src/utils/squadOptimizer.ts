@@ -45,7 +45,7 @@ export interface BestSquadResult {
 const BUDGET = 100.0; // £100m
 const MAX_PER_TEAM = 3;
 
-// Get all players from GW9 fixtures with component-based predictions
+// Get all players from GW9 fixtures
 function getAllGW9Players(injuredPlayerIds: string[] = []): RankedPlayer[] {
   return upcomingFixtures.flatMap(fixture => {
     const predictions = getFixturePredictions(fixture.homeTeam, fixture.awayTeam, injuredPlayerIds);

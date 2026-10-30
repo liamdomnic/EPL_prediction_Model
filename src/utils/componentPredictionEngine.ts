@@ -1,7 +1,7 @@
 import { fplPlayers, type FPLPlayer, type Position } from '../data/fplDatabase';
 import { teams, type Team } from '../data/teams';
 
-// Component-based prediction model following FPL best practices
+// Component-based prediction model
 // Predicts building blocks separately, then converts to FPL points
 
 export interface PlayerPrediction {
