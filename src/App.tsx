@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { teams } from './data/matchData';
 import { predictMatch, MatchPrediction } from './utils/predictionEngine';
 import { getLeagueTable, getTopXgTeams, getBestDefenses, getBestShootingTeams } from './utils/teamStats';
+import { TeamRatings } from './components/TeamRatings';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'predict' | 'table' | 'stats'>('predict');
+  const [activeTab, setActiveTab] = useState<'predict' | 'table' | 'stats' | 'ratings'>('predict');
   const [homeTeam, setHomeTeam] = useState(teams[0]);
   const [awayTeam, setAwayTeam] = useState(teams[1]);
   const [prediction, setPrediction] = useState<MatchPrediction | null>(null);
@@ -67,6 +68,16 @@ function App() {
             }`}
           >
             📈 Team Statistics
+          </button>
+          <button
+            onClick={() => setActiveTab('ratings')}
+            className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+              activeTab === 'ratings'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            ⚔️ Team Ratings
           </button>
         </div>
 
@@ -417,6 +428,11 @@ function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Team Ratings Tab */}
+        {activeTab === 'ratings' && (
+          <TeamRatings />
         )}
       </div>
 
