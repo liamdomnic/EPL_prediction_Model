@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { teams } from './data/matchResults';
+import { teams } from './data/matchData';
 import { predictMatch, MatchPrediction } from './utils/predictionEngine';
-import { getLeagueTable } from './utils/teamStats';
+import { getLeagueTable, getTopXgTeams, getBestDefenses, getBestShootingTeams } from './utils/teamStats';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'predict' | 'table'>('predict');
+  const [activeTab, setActiveTab] = useState<'predict' | 'table' | 'stats'>('predict');
   const [homeTeam, setHomeTeam] = useState(teams[0]);
   const [awayTeam, setAwayTeam] = useState(teams[1]);
   const [prediction, setPrediction] = useState<MatchPrediction | null>(null);
@@ -19,6 +19,9 @@ function App() {
   };
 
   const leagueTable = getLeagueTable();
+  const topXgTeams = getTopXgTeams(5);
+  const bestDefenses = getBestDefenses(5);
+  const bestShooting = getBestShootingTeams(5);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -27,14 +30,14 @@ function App() {
         <div className="container mx-auto px-4 py-6">
           <h1 className="text-3xl font-bold text-center">EPL Match Predictor</h1>
           <p className="text-center text-indigo-100 mt-2">
-            Based on GW1-8 data • Poisson Distribution Model
+            Advanced xG Model • Poisson Distribution • GW1-8 Data
           </p>
         </div>
       </header>
 
       {/* Navigation Tabs */}
       <div className="container mx-auto px-4 mt-6">
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
           <button
             onClick={() => setActiveTab('predict')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all ${
@@ -43,7 +46,7 @@ function App() {
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
-            Match Predictor
+            🎯 Match Predictor
           </button>
           <button
             onClick={() => setActiveTab('table')}
@@ -53,7 +56,17 @@ function App() {
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
-            League Table
+            📊 League Table
+          </button>
+          <button
+            onClick={() => setActiveTab('stats')}
+            className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+              activeTab === 'stats'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            📈 Team Statistics
           </button>
         </div>
 
@@ -84,7 +97,7 @@ function App() {
                   onClick={handlePredict}
                   className="w-full px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
                 >
-                  Predict Match
+                  🎯 Predict Match
                 </button>
               </div>
 
@@ -106,31 +119,31 @@ function App() {
 
             {/* Prediction Results */}
             {prediction && (
-              <div className="border-t-2 border-gray-200 pt-6">
+              <div className="border-t-2 border-gray-200 pt-6 space-y-6">
                 <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
                   {prediction.homeTeam} vs {prediction.awayTeam}
                 </h3>
 
-                {/* Expected Goals */}
-                <div className="grid md:grid-cols-2 gap-4 mb-6">
+                {/* Expected Goals (xG) */}
+                <div className="grid md:grid-cols-2 gap-4">
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 text-center">
                     <div className="text-sm text-gray-600 mb-1">{prediction.homeTeam}</div>
                     <div className="text-4xl font-bold text-blue-600">
                       {prediction.homeExpectedGoals}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">Expected Goals</div>
+                    <div className="text-xs text-gray-500 mt-1">Expected Goals (xG)</div>
                   </div>
                   <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 text-center">
                     <div className="text-sm text-gray-600 mb-1">{prediction.awayTeam}</div>
                     <div className="text-4xl font-bold text-purple-600">
                       {prediction.awayExpectedGoals}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">Expected Goals</div>
+                    <div className="text-xs text-gray-500 mt-1">Expected Goals (xG)</div>
                   </div>
                 </div>
 
-                {/* Match Probabilities */}
-                <div className="bg-gray-50 rounded-lg p-6 mb-6">
+                {/* Match Outcome Probabilities */}
+                <div className="bg-gray-50 rounded-lg p-6">
                   <h4 className="text-lg font-semibold text-gray-800 mb-4">Match Outcome Probabilities</h4>
                   <div className="space-y-3">
                     <div>
@@ -172,8 +185,8 @@ function App() {
                   </div>
                 </div>
 
-                {/* Additional Markets */}
-                <div className="grid md:grid-cols-3 gap-4 mb-6">
+                {/* Goals Markets */}
+                <div className="grid md:grid-cols-3 gap-4">
                   <div className="bg-green-50 rounded-lg p-4 text-center">
                     <div className="text-sm text-gray-600 mb-1">Over 2.5 Goals</div>
                     <div className="text-3xl font-bold text-green-600">
@@ -183,19 +196,49 @@ function App() {
                   <div className="bg-orange-50 rounded-lg p-4 text-center">
                     <div className="text-sm text-gray-600 mb-1">Both Teams to Score</div>
                     <div className="text-3xl font-bold text-orange-600">
-                      {prediction.bttsProb}%
+                      {prediction.bttsYesProb}%
                     </div>
                   </div>
                   <div className="bg-indigo-50 rounded-lg p-4 text-center">
-                    <div className="text-sm text-gray-600 mb-1">Most Likely Score</div>
+                    <div className="text-sm text-gray-600 mb-1">Total xG</div>
                     <div className="text-3xl font-bold text-indigo-600">
-                      {prediction.mostLikelyScore.home}-{prediction.mostLikelyScore.away}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {prediction.mostLikelyScore.prob}% probability
+                      {prediction.totalExpectedGoals}
                     </div>
                   </div>
                 </div>
+
+                {/* Most Likely Scorelines */}
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Top 5 Most Likely Scorelines</h4>
+                  <div className="grid grid-cols-5 gap-2">
+                    {prediction.topScorelines.map((scoreline, idx) => (
+                      <div key={idx} className="bg-white rounded-lg p-3 text-center shadow-sm">
+                        <div className="text-xs text-gray-500 mb-1">#{idx + 1}</div>
+                        <div className="text-2xl font-bold text-indigo-600">
+                          {scoreline.home}-{scoreline.away}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          {scoreline.prob}%
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Value Bet Detection */}
+                {prediction.valueBet !== 'none' && (
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="text-4xl">💰</div>
+                      <div>
+                        <div className="text-lg font-bold text-green-800">Value Bet Detected!</div>
+                        <div className="text-sm text-green-700">
+                          Model suggests {prediction.valueBet === 'home' ? prediction.homeTeam : prediction.valueBet === 'away' ? prediction.awayTeam : 'Draw'} is undervalued by the market
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Confidence Meter */}
                 <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-4">
@@ -238,6 +281,8 @@ function App() {
                     <th className="px-4 py-3 text-center">GF</th>
                     <th className="px-4 py-3 text-center">GA</th>
                     <th className="px-4 py-3 text-center">GD</th>
+                    <th className="px-4 py-3 text-center">xG</th>
+                    <th className="px-4 py-3 text-center">xGA</th>
                     <th className="px-4 py-3 text-center">Pts</th>
                     <th className="px-4 py-3 text-center">Form</th>
                   </tr>
@@ -262,6 +307,8 @@ function App() {
                         {team.goalsFor - team.goalsAgainst > 0 ? '+' : ''}
                         {team.goalsFor - team.goalsAgainst}
                       </td>
+                      <td className="px-4 py-3 text-center text-blue-600 font-semibold">{team.xgFor}</td>
+                      <td className="px-4 py-3 text-center text-red-600">{team.xgAgainst}</td>
                       <td className="px-4 py-3 text-center font-bold text-indigo-600">{team.points}</td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex gap-1 justify-center">
@@ -288,15 +335,98 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Team Statistics Tab */}
+        {activeTab === 'stats' && (
+          <div className="space-y-6">
+            {/* Top xG Teams */}
+            <div className="bg-white rounded-xl shadow-xl p-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">🎯 Top 5 Attacking Teams (xG per game)</h2>
+              <div className="space-y-3">
+                {topXgTeams.map((team, idx) => (
+                  <div key={team.name} className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-orange-500' : 'bg-blue-500'
+                      }`}>
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <div className="font-bold text-lg">{team.name}</div>
+                        <div className="text-sm text-gray-600">{team.shotsPerGame} shots/game • {team.shotsOnTargetPerGame} on target/game</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-blue-600">{team.xgPerGame}</div>
+                      <div className="text-xs text-gray-500">xG per game</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Best Defenses */}
+            <div className="bg-white rounded-xl shadow-xl p-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">🛡️ Top 5 Defenses (xG Against per game)</h2>
+              <div className="space-y-3">
+                {bestDefenses.map((team, idx) => (
+                  <div key={team.name} className="flex items-center justify-between bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-orange-500' : 'bg-green-500'
+                      }`}>
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <div className="font-bold text-lg">{team.name}</div>
+                        <div className="text-sm text-gray-600">{team.goalsAgainst} goals conceded • {team.yellowCards} yellows</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-green-600">{team.xgAgainstPerGame}</div>
+                      <div className="text-xs text-gray-500">xGA per game</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Best Shooting Teams */}
+            <div className="bg-white rounded-xl shadow-xl p-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">🎯 Top 5 Shooting Teams (Shots on Target per game)</h2>
+              <div className="space-y-3">
+                {bestShooting.map((team, idx) => (
+                  <div key={team.name} className="flex items-center justify-between bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-orange-500' : 'bg-purple-500'
+                      }`}>
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <div className="font-bold text-lg">{team.name}</div>
+                        <div className="text-sm text-gray-600">{team.shotsPerGame} shots/game • {team.shootingAccuracy}% accuracy</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-purple-600">{team.shotsOnTargetPerGame}</div>
+                      <div className="text-xs text-gray-500">SoT per game</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
       <footer className="mt-12 py-6 bg-gray-800 text-gray-300 text-center">
         <p className="text-sm">
-          EPL Match Predictor • Based on GW1-8 2025/26 season data
+          EPL Match Predictor • Advanced xG Model • Based on GW1-8 2026/27 season data
         </p>
         <p className="text-xs text-gray-500 mt-1">
-          Predictions use Poisson distribution model with team form and home advantage factors
+          Uses Expected Goals (xG), shots data, and Poisson distribution for predictions
         </p>
       </footer>
     </div>
