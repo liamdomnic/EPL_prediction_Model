@@ -5,6 +5,7 @@ import { getLeagueTable, getTopXgTeams, getBestDefenses, getBestShootingTeams } 
 import { TeamRatings } from './components/TeamRatings';
 import { GW9Predictions } from './components/GW9Predictions';
 import { FPLPredictions } from './components/FPLPredictions';
+import { ModelAccuracy } from './components/ModelAccuracy';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'predict' | 'table' | 'stats' | 'ratings' | 'gw9' | 'fpl'>('predict');
@@ -102,6 +103,9 @@ function App() {
             🏆 Fantasy Predictions
           </button>
         </div>
+
+        {/* Model Accuracy Tracker */}
+        <ModelAccuracy />
 
         {/* Match Predictor Tab */}
         {activeTab === 'predict' && (

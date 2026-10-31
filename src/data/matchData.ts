@@ -152,6 +152,11 @@ export const gw9Fixtures = [
   { homeTeam: "Newcastle", awayTeam: "Everton" },
 ];
 
+// GW9 Actual Results (completed matches)
+export const gw9Results = [
+  { homeTeam: "Chelsea", awayTeam: "Man United", homeGoals: 2, awayGoals: 0, result: "H" as const },
+];
+
 // Get all unique teams
 export const teams = Array.from(new Set([
   ...matchData.map(m => m.homeTeam),

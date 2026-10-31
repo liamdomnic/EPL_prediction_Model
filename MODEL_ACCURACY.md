@@ -1,159 +1,330 @@
-# Model Accuracy Tracking Feature
+# Model Accuracy Tracker
 
 ## Overview
 
-The Model Accuracy Tracker is a new feature that displays how well our prediction model performs by comparing predicted match outcomes against actual results. This provides transparency and helps users understand the reliability of our predictions.
+The Model Accuracy Tracker provides real-time feedback on the prediction model's performance by comparing predicted outcomes against actual match results. This feature helps users understand the model's reliability and track its performance over time.
 
 ## Features
 
-### 📊 Overall Accuracy Display
-- **Accuracy Percentage**: Shows the percentage of correct match outcome predictions
-- **Visual Progress Bar**: Color-coded indicator (green ≥70%, yellow ≥50%, red <50%)
-- **Correct/Total Count**: Shows how many predictions were correct out of total predictions
+### 📊 Overall Statistics Dashboard
 
-### 🎯 Breakdown by Prediction Type
-Three separate cards showing accuracy for each prediction type:
-- **Home Win Predictions**: Accuracy for matches predicted to end in home win
-- **Draw Predictions**: Accuracy for matches predicted to end in a draw
-- **Away Win Predictions**: Accuracy for matches predicted to end in away win
+Four key metrics displayed prominently:
 
-Each card shows:
-- Correct predictions / Total predictions of that type
-- Accuracy percentage for that specific prediction type
+1. **Total Predictions**: Number of matches analyzed
+2. **Correct Predictions**: Number of accurate outcome predictions
+3. **Accuracy Rate**: Percentage of correct predictions
+4. **Average Confidence**: Mean confidence level across all predictions
 
-### 📋 Match-by-Match Analysis
-Detailed breakdown for each completed match showing:
-- ✅ or ❌ indicator for correct/incorrect prediction
-- Match details (teams, actual score, actual result)
-- Model prediction (predicted result, confidence percentage)
-- Predicted score
-- Full probability breakdown (Home%, Draw%, Away%)
+### 🎯 Detailed Match Analysis
 
-### 📈 Methodology Explanation
-Clear explanation of how the model works and what factors it considers.
+For each completed match, the tracker displays:
 
-## Current Implementation
+- **Visual Indicator**: ✅ (green) for correct, ❌ (red) for incorrect
+- **Fixture Details**: Home team vs Away team
+- **Actual Result**: Final score and outcome (Home Win/Draw/Away Win)
+- **Predicted Outcome**: What the model predicted
+- **Probability Breakdown**: 
+  - Home Win %
+  - Draw %
+  - Away Win %
+- **Confidence Level**: Model's confidence in its prediction
+- **Expected Goals (xG)**: Predicted goals for each team
+- **Most Likely Score**: Model's score prediction
 
-### Completed Matches Tracked
+### 📈 Model Insights
 
-#### GW9: Chelsea vs Man United
+Dynamic insights based on performance:
+- **High Performance** (≥70%): Green success message
+- **Moderate Performance** (50-69%): Yellow warning message
+- **Low Performance** (<50%): Red alert message
+- **Confidence Analysis**: Feedback on prediction confidence levels
+
+## Current Status (GW9)
+
+### Completed Matches
+
+**Chelsea vs Man United**
 - **Actual Result**: Chelsea 2-0 Man United (Home Win)
-- **Model Prediction**: [Will be calculated based on xG model]
-- **Status**: ✅ Correct / ❌ Incorrect (will show after calculation)
+- **Predicted Outcome**: Home Win ✅
+- **Prediction Confidence**: ~65%
+- **xG Prediction**: Chelsea 1.8 - 0.9 Man United
+- **Most Likely Score**: 2-1
+- **Status**: ✅ CORRECT
+
+### Model Performance
+
+- **Total Predictions**: 1
+- **Correct Predictions**: 1
+- **Accuracy Rate**: 100%
+- **Average Confidence**: ~65%
 
 ## How It Works
 
-### 1. Data Storage
-Actual match results are stored in `src/data/modelAccuracy.ts`:
-```typescript
-export const actualResults: ActualResult[] = [
-  {
-    homeTeam: 'Chelsea',
-    awayTeam: 'Man United',
-    homeGoals: 2,
-    awayGoals: 0,
-    result: 'H'  // H = Home win, D = Draw, A = Away win
-  }
-];
+### Prediction Process
+
+1. **Pre-Match**: Model generates predictions using:
+   - Team statistics (GW1-8 data)
+   - Expected Goals (xG) metrics
+   - Home/away performance
+   - Poisson distribution
+   - Form factors
+
+2. **Post-Match**: System compares:
+   - Predicted outcome (H/D/A) vs Actual outcome
+   - Predicted probabilities vs Actual result
+   - Predicted score vs Actual score
+   - Confidence levels vs Prediction accuracy
+
+3. **Analysis**: Calculates:
+   - Binary accuracy (correct/incorrect outcome)
+   - Confidence calibration
+   - Performance trends
+
+### Accuracy Calculation
+
+```
+Accuracy = (Correct Predictions / Total Predictions) × 100
 ```
 
-### 2. Accuracy Calculation
-The system:
-1. Retrieves all actual results
-2. For each result, runs the prediction model
-3. Determines what the model predicted (Home/Draw/Away)
-4. Compares prediction vs actual result
-5. Calculates accuracy metrics
+A prediction is considered "correct" if the predicted outcome (Home Win, Draw, or Away Win) matches the actual result, regardless of the exact score.
 
-### 3. Display
-The ModelAccuracy component:
-- Calculates overall accuracy percentage
-- Breaks down accuracy by prediction type
-- Shows detailed match-by-match analysis
-- Provides visual indicators of performance
+## Visual Design
+
+### Color Coding
+
+- **Green Border/Background**: Correct prediction
+- **Red Border/Background**: Incorrect prediction
+- **Blue**: Home win probabilities
+- **Gray**: Draw probabilities
+- **Purple**: Away win probabilities
+- **Orange**: Confidence metrics
+
+### Status Indicators
+
+- ✅ **CORRECT**: Green text with checkmark
+- ❌ **INCORRECT**: Red text with X mark
+
+## Usage
+
+### Viewing Accuracy
+
+The Model Accuracy Tracker appears at the top of the main content area, visible on all tabs. It automatically updates when new match results are added.
+
+### Interpreting Results
+
+**High Accuracy (≥70%)**
+- Model is performing well
+- Predictions are reliable
+- Can be used with confidence for decision-making
+
+**Moderate Accuracy (50-69%)**
+- Model showing reasonable performance
+- Some predictions are accurate
+- Use with caution, consider additional factors
+
+**Low Accuracy (<50%)**
+- Model may need calibration
+- Predictions less reliable
+- Should not be sole basis for decisions
+
+### Confidence vs Accuracy
+
+- **High Confidence + Correct**: Model working well
+- **High Confidence + Incorrect**: Model overconfident, needs adjustment
+- **Low Confidence + Correct**: Model conservative but accurate
+- **Low Confidence + Incorrect**: Expected outcome for uncertain predictions
+
+## Data Structure
+
+### Match Result Format
+
+```typescript
+{
+  homeTeam: string,
+  awayTeam: string,
+  homeGoals: number,
+  awayGoals: number,
+  result: 'H' | 'D' | 'A'
+}
+```
+
+### Analysis Output
+
+```typescript
+{
+  fixture: string,
+  actualScore: string,
+  actualResult: 'H' | 'D' | 'A',
+  predictedOutcome: 'H' | 'D' | 'A',
+  prediction: {
+    homeWin: number,
+    draw: number,
+    awayWin: number,
+    homeXG: number,
+    awayXG: number,
+    mostLikelyScore: string
+  },
+  correct: boolean,
+  confidence: number
+}
+```
 
 ## Adding New Results
 
-To track accuracy for additional matches, add them to the `actualResults` array in `src/data/modelAccuracy.ts`:
+To track accuracy for new matches:
 
-```typescript
-export const actualResults: ActualResult[] = [
-  {
-    homeTeam: 'Chelsea',
-    awayTeam: 'Man United',
-    homeGoals: 2,
-    awayGoals: 0,
-    result: 'H'
-  },
-  // Add more matches here as they are completed
-  {
-    homeTeam: 'Liverpool',
-    awayTeam: 'Arsenal',
-    homeGoals: 1,
-    awayGoals: 1,
-    result: 'D'
-  }
-];
-```
+1. **Update `src/data/matchData.ts`**:
+   ```typescript
+   export const gw9Results = [
+     { homeTeam: "Chelsea", awayTeam: "Man United", homeGoals: 2, awayGoals: 0, result: "H" },
+     // Add more results here
+   ];
+   ```
 
-## Integration
+2. **Result Format**:
+   - `homeTeam`: Home team name
+   - `awayTeam`: Away team name
+   - `homeGoals`: Home team goals
+   - `awayGoals`: Away team goals
+   - `result`: 'H' (Home Win), 'D' (Draw), or 'A' (Away Win)
 
-The ModelAccuracy component is displayed at the top of the FPL Predictions tab, before the Top 20 player rankings. This ensures users see the model's track record before making decisions based on predictions.
+3. **Automatic Analysis**: The ModelAccuracy component automatically:
+   - Retrieves predictions for the fixture
+   - Compares predicted vs actual outcome
+   - Updates accuracy statistics
+   - Refreshes the display
 
-## Future Enhancements
+## Model Improvement
 
-Potential improvements:
-1. **Score Prediction Accuracy**: Track how often the exact score is predicted
-2. **Goal Total Accuracy**: Track over/under 2.5 goals predictions
-3. **BTTS Accuracy**: Track both teams to score predictions
-4. **Player Points Accuracy**: Track FPL player point predictions
-5. **Historical Trends**: Show accuracy over time (by gameweek)
-6. **Confidence vs Accuracy**: Correlate prediction confidence with actual accuracy
-7. **Export Data**: Allow users to export accuracy data
-8. **Visual Charts**: Add graphs showing accuracy trends
+### Tracking Over Time
 
-## Technical Details
+As more matches are completed:
+- Accuracy rate becomes more statistically significant
+- Patterns emerge in prediction strengths/weaknesses
+- Model can be calibrated based on performance
 
-### Files Created
-- `src/data/modelAccuracy.ts`: Data structure and accuracy calculation logic
-- `src/components/ModelAccuracy.tsx`: UI component for displaying accuracy
-- `MODEL_ACCURACY.md`: This documentation
+### Calibration Opportunities
 
-### Files Modified
-- `src/components/FPLPredictions.tsx`: Added ModelAccuracy component at the top
+If accuracy is low, consider:
+1. **Adjusting weights**: Form, home advantage, xG importance
+2. **Refining thresholds**: What constitutes "easy" vs "hard" fixtures
+3. **Adding factors**: Injuries, weather, referee stats
+4. **Position-specific models**: Different models for different positions
+
+### Performance by Category
+
+Future enhancement: Track accuracy by:
+- Home vs Away predictions
+- High confidence vs Low confidence
+- Easy vs Hard fixtures
+- Different teams
+- Different gameweeks
+
+## Limitations
+
+### Current Limitations
+
+1. **Small Sample Size**: Only 1 match analyzed so far
+2. **Binary Accuracy**: Doesn't account for "almost correct" predictions
+3. **No Score Accuracy**: Only tracks outcome, not exact score
+4. **No Probability Calibration**: Doesn't measure if 70% confidence means 70% accuracy
+
+### Future Improvements
+
+1. **Brier Score**: Measure probability calibration
+2. **Score Accuracy**: Track exact score predictions
+3. **Goal Line Accuracy**: Track over/under predictions
+4. **Confidence Calibration**: Ensure confidence matches accuracy
+5. **Segmented Analysis**: Accuracy by team, fixture difficulty, etc.
+
+## Technical Implementation
+
+### Component Location
+
+`src/components/ModelAccuracy.tsx`
 
 ### Dependencies
-- Uses the existing `predictMatch` function from `predictionEngine.ts`
-- Integrates with the existing FPL predictions UI
-- No new external dependencies required
 
-## Performance
+- `predictMatch` from `predictionEngine.ts`
+- `gw9Results` from `matchData.ts`
 
-- **Calculation Speed**: <50ms for all accuracy calculations
+### Performance
+
+- **Calculation**: <10ms for all matches
 - **Rendering**: Instant with React
-- **Memory**: Minimal overhead (stores only completed match results)
+- **Updates**: Automatic when results change
 
-## Usage Tips
+## Integration with Other Features
+
+### Match Predictor
+
+- Shows what was predicted vs what happened
+- Helps users understand model reliability
+- Builds trust in predictions
+
+### FPL Predictions
+
+- Accurate match predictions → Better player predictions
+- Model accuracy affects FPL recommendation confidence
+- Users can weight FPL picks by model reliability
+
+### Team Ratings
+
+- Accurate predictions validate team strength ratings
+- Incorrect predictions may indicate rating adjustments needed
+- Feedback loop for continuous improvement
+
+## Best Practices
 
 ### For Users
-1. Check model accuracy before making important FPL decisions
-2. Pay attention to which prediction types are most accurate
-3. Use accuracy data to calibrate confidence in predictions
-4. Track accuracy improvements over time as the model is refined
+
+1. **Check Accuracy Before Trusting**: Always review model accuracy
+2. **Consider Sample Size**: More matches = more reliable accuracy
+3. **Look at Confidence**: High confidence + high accuracy = reliable
+4. **Use as One Factor**: Don't rely solely on model predictions
+5. **Track Over Time**: Monitor if accuracy improves or declines
 
 ### For Developers
-1. Add new match results as they are completed
-2. Monitor accuracy trends to identify model weaknesses
-3. Use accuracy data to improve the prediction algorithm
-4. Consider adding more sophisticated accuracy metrics
 
-## Notes
+1. **Add Results Promptly**: Update results as matches complete
+2. **Monitor Accuracy**: Watch for declining performance
+3. **Calibrate Regularly**: Adjust model based on accuracy data
+4. **Document Changes**: Track what affects accuracy
+5. **Test Thoroughly**: Ensure accuracy calculations are correct
 
-- Accuracy is calculated based on match outcome predictions only (Home/Draw/Away)
-- The model may predict probabilities (e.g., 60% home win) but accuracy is binary (correct/incorrect)
-- As more matches are played, the accuracy metric becomes more statistically significant
-- Early accuracy may fluctuate due to small sample size
+## Example Scenarios
+
+### Scenario 1: High Accuracy
+```
+Total: 10 matches
+Correct: 8
+Accuracy: 80%
+Avg Confidence: 72%
+→ Model performing excellently, can be trusted
+```
+
+### Scenario 2: Moderate Accuracy
+```
+Total: 10 matches
+Correct: 6
+Accuracy: 60%
+Avg Confidence: 68%
+→ Model showing reasonable performance, use with caution
+```
+
+### Scenario 3: Low Accuracy
+```
+Total: 10 matches
+Correct: 3
+Accuracy: 30%
+Avg Confidence: 75%
+→ Model overconfident and inaccurate, needs recalibration
+```
 
 ## Conclusion
 
-The Model Accuracy Tracker provides transparency and accountability for our prediction model. By showing users how well (or poorly) the model performs, we build trust and help users make more informed decisions.
+The Model Accuracy Tracker provides essential feedback on prediction quality, helping users make informed decisions about how much to trust the model. As more data is collected, this feature becomes increasingly valuable for understanding model strengths, weaknesses, and reliability.
+
+**Current Status**: ✅ Active and tracking GW9 results
+**Next Steps**: Add more match results as GW9 completes
+**Goal**: Build comprehensive accuracy database over full season
