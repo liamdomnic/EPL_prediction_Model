@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { fplPlayers, FPLPlayer } from '../data/fplData';
 import { gw9Fixtures } from '../data/matchData';
 import { predictMatch } from '../utils/predictionEngine';
+import { ModelAccuracy } from './ModelAccuracy';
 
 interface PlayerPrediction {
   player: FPLPlayer;
@@ -165,8 +166,13 @@ export function FPLPredictions() {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-xl p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">🏆 Top 20 FPL Picks for GW9</h2>
+    <div className="space-y-6">
+      {/* Model Accuracy Section */}
+      <ModelAccuracy />
+      
+      {/* Top 20 FPL Picks */}
+      <div className="bg-white rounded-xl shadow-xl p-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">🏆 Top 20 FPL Picks for GW9</h2>
       
       {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-6">
@@ -328,6 +334,7 @@ export function FPLPredictions() {
           <li>• <strong>Home Advantage:</strong> 10% bonus for home fixtures</li>
           <li>• <strong>Clean Sheet Bonus:</strong> Small bonus for defenders/keepers in favorable fixtures</li>
         </ul>
+      </div>
       </div>
     </div>
   );
