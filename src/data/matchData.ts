@@ -138,6 +138,20 @@ export const matchData: MatchData[] = [
   { date: "25/10/2026", homeTeam: "Sunderland", awayTeam: "Leeds", fthg: 0, ftag: 0, ftr: "D", hthg: 0, htag: 0, htr: "D", referee: "S Attwell", hxg: 0.83, axg: 0.76, hs: 15, as: 11, hst: 4, ast: 4, hf: 10, af: 14, hc: 4, ac: 5, hy: 1, ay: 2, hr: 0, ar: 0, avgh: 3.04, avgd: 3.21, avga: 2.35, avgOver25: 2.54, avgUnder25: 2.1, ahLine: 0 },
 ];
 
+// GW9 Fixtures (upcoming)
+export const gw9Fixtures = [
+  { homeTeam: "Chelsea", awayTeam: "Man United" },
+  { homeTeam: "Bournemouth", awayTeam: "Leeds" },
+  { homeTeam: "Brentford", awayTeam: "Nott'm Forest" },
+  { homeTeam: "Coventry", awayTeam: "Sunderland" },
+  { homeTeam: "Hull", awayTeam: "Ipswich" },
+  { homeTeam: "Man City", awayTeam: "Brighton" },
+  { homeTeam: "Tottenham", awayTeam: "Crystal Palace" },
+  { homeTeam: "Aston Villa", awayTeam: "Fulham" },
+  { homeTeam: "Liverpool", awayTeam: "Arsenal" },
+  { homeTeam: "Newcastle", awayTeam: "Everton" },
+];
+
 // Get all unique teams
 export const teams = Array.from(new Set([
   ...matchData.map(m => m.homeTeam),
