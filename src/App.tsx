@@ -4,9 +4,10 @@ import { predictMatch, MatchPrediction } from './utils/predictionEngine';
 import { getLeagueTable, getTopXgTeams, getBestDefenses, getBestShootingTeams } from './utils/teamStats';
 import { TeamRatings } from './components/TeamRatings';
 import { GW9Predictions } from './components/GW9Predictions';
+import { FPLPredictions } from './components/FPLPredictions';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'predict' | 'table' | 'stats' | 'ratings' | 'gw9'>('predict');
+  const [activeTab, setActiveTab] = useState<'predict' | 'table' | 'stats' | 'ratings' | 'gw9' | 'fpl'>('predict');
   const [homeTeam, setHomeTeam] = useState('Chelsea');
   const [awayTeam, setAwayTeam] = useState('Man United');
   const [prediction, setPrediction] = useState<MatchPrediction | null>(null);
@@ -89,6 +90,16 @@ function App() {
             }`}
           >
             📅 GW9 Fixtures
+          </button>
+          <button
+            onClick={() => setActiveTab('fpl')}
+            className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+              activeTab === 'fpl'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            🏆 Fantasy Predictions
           </button>
         </div>
 
@@ -449,6 +460,11 @@ function App() {
         {/* GW9 Predictions Tab */}
         {activeTab === 'gw9' && (
           <GW9Predictions />
+        )}
+
+        {/* FPL Predictions Tab */}
+        {activeTab === 'fpl' && (
+          <FPLPredictions />
         )}
       </div>
 
