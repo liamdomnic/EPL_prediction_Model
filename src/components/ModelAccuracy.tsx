@@ -27,6 +27,11 @@ export function ModelAccuracy() {
     else if (predictedOutcome === 'D') confidence = prediction.drawProb;
     else confidence = prediction.awayWinProb;
     
+    // Check if score prediction was correct
+    const predictedScore = `${prediction.mostLikelyScore.home}-${prediction.mostLikelyScore.away}`;
+    const actualScore = `${result.homeGoals}-${result.awayGoals}`;
+    const scoreCorrect = predictedScore === actualScore;
+    
     return {
       fixture: `${result.homeTeam} vs ${result.awayTeam}`,
       actualScore: `${result.homeGoals}-${result.awayGoals}`,
@@ -41,6 +46,7 @@ export function ModelAccuracy() {
         mostLikelyScore: `${prediction.mostLikelyScore.home}-${prediction.mostLikelyScore.away}`
       },
       correct,
+      scoreCorrect,
       confidence
     };
   });
@@ -49,6 +55,10 @@ export function ModelAccuracy() {
   const totalPredictions = analysis.length;
   const correctPredictions = analysis.filter(a => a.correct).length;
   const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
+  
+  // Calculate score accuracy
+  const correctScores = analysis.filter(a => a.scoreCorrect).length;
+  const scoreAccuracy = totalPredictions > 0 ? (correctScores / totalPredictions) * 100 : 0;
   
   // Calculate average confidence
   const avgConfidence = totalPredictions > 0 
@@ -63,18 +73,24 @@ export function ModelAccuracy() {
       </div>
       
       {/* Overall Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
           <div className="text-sm text-gray-600 mb-1">Total Predictions</div>
           <div className="text-3xl font-bold text-blue-600">{totalPredictions}</div>
         </div>
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-1">Correct Predictions</div>
-          <div className="text-3xl font-bold text-green-600">{correctPredictions}</div>
+          <div className="text-sm text-gray-600 mb-1">Outcome Accuracy</div>
+          <div className="text-3xl font-bold text-green-600">{accuracy.toFixed(1)}%</div>
+          <div className="text-xs text-gray-500">{correctPredictions}/{totalPredictions}</div>
+        </div>
+        <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-4">
+          <div className="text-sm text-gray-600 mb-1">Score Accuracy</div>
+          <div className="text-3xl font-bold text-cyan-600">{scoreAccuracy.toFixed(1)}%</div>
+          <div className="text-xs text-gray-500">{correctScores}/{totalPredictions}</div>
         </div>
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-1">Accuracy Rate</div>
-          <div className="text-3xl font-bold text-purple-600">{accuracy.toFixed(1)}%</div>
+          <div className="text-sm text-gray-600 mb-1">Correct Scores</div>
+          <div className="text-3xl font-bold text-purple-600">{correctScores}</div>
         </div>
         <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4">
           <div className="text-sm text-gray-600 mb-1">Avg Confidence</div>
@@ -88,13 +104,23 @@ export function ModelAccuracy() {
           <div 
             key={idx} 
             className={`border-2 rounded-lg p-4 ${
-              item.correct ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'
+              item.correct 
+                ? 'border-green-500 bg-green-50' 
+                : item.scoreCorrect 
+                ? 'border-blue-500 bg-blue-50' 
+                : 'border-red-500 bg-red-50'
             }`}
           >
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
-                <div className={`text-2xl ${item.correct ? '✅' : '❌'}`}>
-                  {item.correct ? '✅' : '❌'}
+                <div className={`text-2xl ${
+                  item.correct && item.scoreCorrect ? '✅' :
+                  item.scoreCorrect ? '🎯' :
+                  item.correct ? '✓' : '❌'
+                }`}>
+                  {item.correct && item.scoreCorrect ? '✅' :
+                   item.scoreCorrect ? '🎯' :
+                   item.correct ? '✓' : '❌'}
                 </div>
                 <div>
                   <div className="font-bold text-lg">{item.fixture}</div>
@@ -146,8 +172,27 @@ export function ModelAccuracy() {
                   Predicted Score: <span className="font-bold">{item.prediction.mostLikelyScore}</span>
                 </span>
               </div>
-              <div className={`font-bold ${item.correct ? 'text-green-600' : 'text-red-600'}`}>
-                {item.correct ? '✓ CORRECT' : '✗ INCORRECT'}
+              <div className="flex gap-2">
+                {item.correct && item.scoreCorrect && (
+                  <div className="font-bold text-green-600">
+                    ✓ PERFECT PREDICTION
+                  </div>
+                )}
+                {!item.correct && item.scoreCorrect && (
+                  <div className="font-bold text-blue-600">
+                    ✓ SCORE CORRECT
+                  </div>
+                )}
+                {item.correct && !item.scoreCorrect && (
+                  <div className="font-bold text-green-600">
+                    ✓ OUTCOME CORRECT
+                  </div>
+                )}
+                {!item.correct && !item.scoreCorrect && (
+                  <div className="font-bold text-red-600">
+                    ✗ INCORRECT
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -159,13 +204,16 @@ export function ModelAccuracy() {
         <h3 className="font-bold text-gray-800 mb-2">📊 Model Insights</h3>
         <div className="text-sm text-gray-700 space-y-1">
           {accuracy >= 70 && (
-            <p className="text-green-700">✓ Model performing well with {accuracy.toFixed(1)}% accuracy</p>
+            <p className="text-green-700">✓ Model performing well with {accuracy.toFixed(1)}% outcome accuracy</p>
           )}
           {accuracy >= 50 && accuracy < 70 && (
-            <p className="text-yellow-700">⚠ Model showing moderate performance at {accuracy.toFixed(1)}% accuracy</p>
+            <p className="text-yellow-700">⚠ Model showing moderate performance at {accuracy.toFixed(1)}% outcome accuracy</p>
           )}
           {accuracy < 50 && (
-            <p className="text-red-700">⚠ Model accuracy below 50% - may need calibration</p>
+            <p className="text-red-700">⚠ Model outcome accuracy below 50% - may need calibration</p>
+          )}
+          {scoreAccuracy > 0 && (
+            <p className="text-cyan-700">✓ Score predictions: {scoreAccuracy.toFixed(1)}% accuracy ({correctScores} exact scores)</p>
           )}
           {avgConfidence > 70 && (
             <p className="text-blue-700">✓ High confidence predictions (avg {avgConfidence.toFixed(1)}%)</p>
