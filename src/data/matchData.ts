@@ -162,6 +162,7 @@ export const gw9Results = [
   { homeTeam: "Hull", awayTeam: "Ipswich", homeGoals: 2, awayGoals: 2, result: "D" as const },
   { homeTeam: "Tottenham", awayTeam: "Crystal Palace", homeGoals: 2, awayGoals: 0, result: "H" as const },
   { homeTeam: "Aston Villa", awayTeam: "Fulham", homeGoals: 1, awayGoals: 1, result: "D" as const },
+  { homeTeam: "Liverpool", awayTeam: "Arsenal", homeGoals: 0, awayGoals: 1, result: "A" as const },
 ];
 
 // Get all unique teams
