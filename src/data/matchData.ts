@@ -155,6 +155,13 @@ export const gw9Fixtures = [
 // GW9 Actual Results (completed matches)
 export const gw9Results = [
   { homeTeam: "Chelsea", awayTeam: "Man United", homeGoals: 2, awayGoals: 0, result: "H" as const },
+  { homeTeam: "Bournemouth", awayTeam: "Leeds", homeGoals: 2, awayGoals: 0, result: "H" as const },
+  { homeTeam: "Coventry", awayTeam: "Sunderland", homeGoals: 3, awayGoals: 1, result: "H" as const },
+  { homeTeam: "Man City", awayTeam: "Brighton", homeGoals: 0, awayGoals: 1, result: "A" as const },
+  { homeTeam: "Brentford", awayTeam: "Nott'm Forest", homeGoals: 2, awayGoals: 0, result: "H" as const },
+  { homeTeam: "Hull", awayTeam: "Ipswich", homeGoals: 2, awayGoals: 2, result: "D" as const },
+  { homeTeam: "Tottenham", awayTeam: "Crystal Palace", homeGoals: 2, awayGoals: 0, result: "H" as const },
+  { homeTeam: "Aston Villa", awayTeam: "Fulham", homeGoals: 1, awayGoals: 1, result: "D" as const },
 ];
 
 // Get all unique teams
