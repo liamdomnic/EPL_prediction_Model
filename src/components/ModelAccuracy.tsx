@@ -8,13 +8,15 @@ export function ModelAccuracy() {
     
     // Determine predicted outcome
     let predictedOutcome: 'H' | 'D' | 'A';
-    if (prediction.homeWinProb > prediction.drawProb && prediction.homeWinProb > prediction.awayWinProb) {
-      predictedOutcome = 'H';
-    } else if (prediction.drawProb > prediction.homeWinProb && prediction.drawProb > prediction.awayWinProb) {
-      predictedOutcome = 'D';
-    } else {
-      predictedOutcome = 'A';
-    }
+    const probs = [
+      { outcome: 'H' as const, prob: prediction.homeWinProb },
+      { outcome: 'D' as const, prob: prediction.drawProb },
+      { outcome: 'A' as const, prob: prediction.awayWinProb }
+    ];
+    
+    // Find the outcome with highest probability
+    probs.sort((a, b) => b.prob - a.prob);
+    predictedOutcome = probs[0].outcome;
     
     // Check if prediction was correct
     const correct = predictedOutcome === result.result;
