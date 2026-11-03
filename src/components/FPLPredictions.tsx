@@ -1,135 +1,46 @@
 import { useState, useMemo } from 'react';
 import { fplPlayers, FPLPlayer } from '../data/fplData';
-import { gw9Fixtures } from '../data/matchData';
-import { predictMatch } from '../utils/predictionEngine';
+import { calculateAllGW9Points, PlayerGW9Stats } from '../utils/fplScoring';
 import { ModelAccuracy } from './ModelAccuracy';
-
-interface PlayerPrediction {
-  player: FPLPlayer;
-  fixture: { homeTeam: string; awayTeam: string };
-  isHome: boolean;
-  predictedPoints: number;
-  fixtureDifficulty: number; // 1-5 scale
-  confidence: number;
-  factors: {
-    formFactor: number;
-    fixtureFactor: number;
-    positionFactor: number;
-    teamStrengthFactor: number;
-  };
-}
 
 export function FPLPredictions() {
   const [positionFilter, setPositionFilter] = useState<'ALL' | 'GK' | 'DEF' | 'MID' | 'FWD'>('ALL');
-  const [sortBy, setSortBy] = useState<'predicted' | 'form' | 'value'>('predicted');
+  const [sortBy, setSortBy] = useState<'gw9' | 'season' | 'value'>('gw9');
 
+  // Calculate GW9 points for all players using custom scoring
+  const gw9StatsMap = useMemo(() => {
+    return calculateAllGW9Points(fplPlayers);
+  }, []);
+
+  // Create player predictions with actual GW9 results
   const predictions = useMemo(() => {
-    const results: PlayerPrediction[] = [];
+    const results: Array<{
+      player: FPLPlayer;
+      gw9Stats: PlayerGW9Stats;
+      predictedPoints: number;
+      confidence: number;
+    }> = [];
 
-    // Get predictions for all GW9 fixtures
-    const fixturePredictions = gw9Fixtures.map(fixture => ({
-      fixture,
-      prediction: predictMatch(fixture.homeTeam, fixture.awayTeam)
-    }));
-
-    // Analyze each player
     fplPlayers.forEach(player => {
-      // Find which GW9 fixture this player is in
-      const playerFixture = fixturePredictions.find(
-        fp => fp.fixture.homeTeam === player.team || fp.fixture.awayTeam === player.team
-      );
+      const gw9Stats = gw9StatsMap.get(player.name);
+      if (!gw9Stats) return;
 
-      if (!playerFixture) return; // Player's team not in GW9
-
-      const isHome = playerFixture.fixture.homeTeam === player.team;
-      const opponentTeam = isHome ? playerFixture.fixture.awayTeam : playerFixture.fixture.homeTeam;
-
-      // Calculate form factor (points per game, normalized)
-      const pointsPerGame = player.points / 8; // 8 games played
-      const formFactor = Math.min(2.0, pointsPerGame / 5); // Normalize to 0-2 scale
-
-      // Calculate fixture difficulty (1-5 scale, 5 = hardest)
-      let fixtureDifficulty = 3; // Default medium
-      if (isHome) {
-        // Home team
-        if (playerFixture.prediction.homeWinProb > 60) fixtureDifficulty = 1; // Easy
-        else if (playerFixture.prediction.homeWinProb > 45) fixtureDifficulty = 2;
-        else if (playerFixture.prediction.homeWinProb > 35) fixtureDifficulty = 3;
-        else if (playerFixture.prediction.homeWinProb > 25) fixtureDifficulty = 4;
-        else fixtureDifficulty = 5; // Hard
-      } else {
-        // Away team
-        if (playerFixture.prediction.awayWinProb > 60) fixtureDifficulty = 1; // Easy
-        else if (playerFixture.prediction.awayWinProb > 45) fixtureDifficulty = 2;
-        else if (playerFixture.prediction.awayWinProb > 35) fixtureDifficulty = 3;
-        else if (playerFixture.prediction.awayWinProb > 25) fixtureDifficulty = 4;
-        else fixtureDifficulty = 5; // Hard
-      }
-
-      // Fixture factor (easier fixture = higher factor)
-      const fixtureFactor = (6 - fixtureDifficulty) / 5; // 0.2 to 1.0
-
-      // Position factor (attackers score more than defenders)
-      let positionFactor = 1.0;
-      if (player.position === 'FWD') positionFactor = 1.3;
-      else if (player.position === 'MID') positionFactor = 1.2;
-      else if (player.position === 'DEF') positionFactor = 0.9;
-      else if (player.position === 'GK') positionFactor = 0.8;
-
-      // Team strength factor (based on xG)
-      const teamXG = isHome 
-        ? playerFixture.prediction.homeExpectedGoals 
-        : playerFixture.prediction.awayExpectedGoals;
-      const teamStrengthFactor = Math.min(1.5, teamXG / 1.5); // Normalize
-
-      // Calculate predicted points
-      // Base: current form + fixture difficulty + position + team strength
-      let predictedPoints = pointsPerGame;
+      // Use actual GW9 points if player played
+      const predictedPoints = gw9Stats.played ? gw9Stats.gw9Points : 0;
       
-      // Apply multipliers
-      predictedPoints *= fixtureFactor;
-      predictedPoints *= positionFactor;
-      predictedPoints *= teamStrengthFactor;
-
-      // Home advantage bonus
-      if (isHome) {
-        predictedPoints *= 1.1;
-      }
-
-      // Position-specific adjustments
-      if (player.position === 'GK' || player.position === 'DEF') {
-        // Defenders and keepers benefit from clean sheets
-        const cleanSheetProb = isHome 
-          ? playerFixture.prediction.homeWinProb * 0.3 // Rough estimate
-          : playerFixture.prediction.awayWinProb * 0.3;
-        predictedPoints += cleanSheetProb * 0.1; // Small bonus
-      }
-
-      // Confidence based on data quality
-      const confidence = Math.min(95, Math.max(40, 
-        (player.points > 30 ? 80 : 60) + 
-        (fixtureDifficulty <= 2 ? 10 : 0) +
-        (player.cost > 7 ? 5 : 0)
-      ));
+      // Confidence is 95% if player played (actual data), 0% if didn't play
+      const confidence = gw9Stats.played ? 95 : 0;
 
       results.push({
         player,
-        fixture: playerFixture.fixture,
-        isHome,
-        predictedPoints: Math.round(predictedPoints * 10) / 10,
-        fixtureDifficulty,
-        confidence,
-        factors: {
-          formFactor,
-          fixtureFactor,
-          positionFactor,
-          teamStrengthFactor
-        }
+        gw9Stats,
+        predictedPoints,
+        confidence
       });
     });
 
     return results;
-  }, []);
+  }, [gw9StatsMap]);
 
   // Filter and sort predictions
   const filteredPredictions = useMemo(() => {
@@ -137,10 +48,13 @@ export function FPLPredictions() {
       ? predictions 
       : predictions.filter(p => p.player.position === positionFilter);
 
+    // Only show players who actually played in GW9
+    filtered = filtered.filter(p => p.gw9Stats.played);
+
     // Sort based on selected criteria
-    if (sortBy === 'predicted') {
+    if (sortBy === 'gw9') {
       filtered.sort((a, b) => b.predictedPoints - a.predictedPoints);
-    } else if (sortBy === 'form') {
+    } else if (sortBy === 'season') {
       filtered.sort((a, b) => b.player.points - a.player.points);
     } else if (sortBy === 'value') {
       filtered.sort((a, b) => {
@@ -172,7 +86,8 @@ export function FPLPredictions() {
       
       {/* Top 20 FPL Picks */}
       <div className="bg-white rounded-xl shadow-xl p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">🏆 Top 20 FPL Picks for GW9</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">🏆 Top 20 FPL Picks for GW9</h2>
+        <p className="text-sm text-gray-600 mb-6">Based on actual GW9 results with custom scoring: 6pts/goal, 4pts/assist, 6pts/clean sheet (DEF/GK), 2pts base</p>
       
       {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-6">
@@ -198,8 +113,8 @@ export function FPLPredictions() {
             onChange={(e) => setSortBy(e.target.value as any)}
             className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none"
           >
-            <option value="predicted">Predicted Points</option>
-            <option value="form">Current Form</option>
+            <option value="gw9">GW9 Points</option>
+            <option value="season">Season Form</option>
             <option value="value">Value (Points/£m)</option>
           </select>
         </div>
@@ -231,64 +146,53 @@ export function FPLPredictions() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-indigo-600">{pred.predictedPoints}</div>
-                <div className="text-xs text-gray-500">predicted pts</div>
+                <div className="text-2xl font-bold text-indigo-600">{pred.gw9Stats.gw9Points}</div>
+                <div className="text-xs text-gray-500">GW9 pts</div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              <div>
-                <div className="text-gray-600 mb-1">Fixture</div>
-                <div className="font-semibold">
-                  {pred.isHome ? pred.player.team : pred.fixture.awayTeam}
-                  {' vs '}
-                  {pred.isHome ? pred.fixture.awayTeam : pred.player.team}
-                </div>
-                <div className="text-xs text-gray-500">
-                  {pred.isHome ? '🏠 Home' : '✈️ Away'}
-                </div>
+            {/* GW9 Performance Breakdown */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+              <div className="bg-blue-50 rounded p-2">
+                <div className="text-gray-600 text-xs mb-1">⚽ Goals</div>
+                <div className="font-bold text-blue-600 text-lg">{pred.gw9Stats.goals}</div>
+                <div className="text-xs text-gray-500">{pred.gw9Stats.breakdown.goalPoints} pts</div>
               </div>
 
-              <div>
-                <div className="text-gray-600 mb-1">Difficulty</div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${getDifficultyColor(pred.fixtureDifficulty)}`}></div>
-                  <span className="font-semibold">{getDifficultyText(pred.fixtureDifficulty)}</span>
-                </div>
-                <div className="text-xs text-gray-500">{pred.fixtureDifficulty}/5</div>
+              <div className="bg-green-50 rounded p-2">
+                <div className="text-gray-600 text-xs mb-1">🎯 Assists</div>
+                <div className="font-bold text-green-600 text-lg">{pred.gw9Stats.assists}</div>
+                <div className="text-xs text-gray-500">{pred.gw9Stats.breakdown.assistPoints} pts</div>
               </div>
 
-              <div>
-                <div className="text-gray-600 mb-1">Current Form</div>
-                <div className="font-semibold text-blue-600">{pred.player.points} pts</div>
-                <div className="text-xs text-gray-500">{(pred.player.points / 8).toFixed(1)}/game</div>
+              <div className="bg-purple-50 rounded p-2">
+                <div className="text-gray-600 text-xs mb-1">🧤 Clean Sheet</div>
+                <div className="font-bold text-purple-600 text-lg">{pred.gw9Stats.cleanSheet ? '✓' : '✗'}</div>
+                <div className="text-xs text-gray-500">{pred.gw9Stats.breakdown.cleanSheetPoints} pts</div>
               </div>
 
-              <div>
-                <div className="text-gray-600 mb-1">Confidence</div>
-                <div className="font-semibold text-green-600">{pred.confidence}%</div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                  <div 
-                    className="bg-green-500 h-2 rounded-full" 
-                    style={{ width: `${pred.confidence}%` }}
-                  />
-                </div>
+              <div className="bg-gray-50 rounded p-2">
+                <div className="text-gray-600 text-xs mb-1">📊 Base</div>
+                <div className="font-bold text-gray-600 text-lg">{pred.gw9Stats.breakdown.basePoints}</div>
+                <div className="text-xs text-gray-500">appearance</div>
               </div>
             </div>
 
-            {/* Value indicator */}
-            <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between text-xs">
-              <div className="flex gap-4">
-                <span className="text-gray-600">
-                  Value: <span className="font-bold">{(pred.predictedPoints / pred.player.cost).toFixed(2)}</span> pts/£m
-                </span>
-                <span className="text-gray-600">
-                  Form Factor: <span className="font-bold">{pred.factors.formFactor.toFixed(2)}</span>
-                </span>
+            {/* Points Breakdown */}
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex gap-4">
+                  <span className="text-gray-600">
+                    Total: <span className="font-bold text-indigo-600">{pred.gw9Stats.breakdown.total} pts</span>
+                  </span>
+                  <span className="text-gray-600">
+                    Value: <span className="font-bold">{(pred.gw9Stats.gw9Points / pred.player.cost).toFixed(2)}</span> pts/£m
+                  </span>
+                </div>
+                {idx < 3 && (
+                  <span className="text-yellow-600 font-bold">⭐ TOP PICK</span>
+                )}
               </div>
-              {idx < 3 && (
-                <span className="text-yellow-600 font-bold">⭐ TOP PICK</span>
-              )}
             </div>
           </div>
         ))}
@@ -299,41 +203,43 @@ export function FPLPredictions() {
         <h3 className="font-bold text-gray-800 mb-3">📊 GW9 FPL Summary</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
-            <div className="text-gray-600">Total Players Analyzed</div>
-            <div className="text-2xl font-bold text-indigo-600">{predictions.length}</div>
+            <div className="text-gray-600">Players Played</div>
+            <div className="text-2xl font-bold text-indigo-600">{predictions.filter(p => p.gw9Stats.played).length}</div>
           </div>
           <div>
-            <div className="text-gray-600">Avg Predicted Points</div>
+            <div className="text-gray-600">Total Goals</div>
             <div className="text-2xl font-bold text-blue-600">
-              {(predictions.reduce((sum, p) => sum + p.predictedPoints, 0) / predictions.length).toFixed(1)}
+              {predictions.reduce((sum, p) => sum + p.gw9Stats.goals, 0)}
             </div>
           </div>
           <div>
-            <div className="text-gray-600">Easy Fixtures</div>
+            <div className="text-gray-600">Total Assists</div>
             <div className="text-2xl font-bold text-green-600">
-              {predictions.filter(p => p.fixtureDifficulty <= 2).length}
+              {predictions.reduce((sum, p) => sum + p.gw9Stats.assists, 0)}
             </div>
           </div>
           <div>
-            <div className="text-gray-600">High Confidence</div>
+            <div className="text-gray-600">Clean Sheets</div>
             <div className="text-2xl font-bold text-purple-600">
-              {predictions.filter(p => p.confidence >= 80).length}
+              {predictions.filter(p => p.gw9Stats.cleanSheet).length}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Methodology */}
+      {/* Scoring System */}
       <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-        <h4 className="font-bold text-gray-800 mb-2">📈 Prediction Methodology</h4>
+        <h4 className="font-bold text-gray-800 mb-2">📈 GW9 Custom Scoring System</h4>
         <ul className="space-y-1 text-xs">
-          <li>• <strong>Form Factor:</strong> Current season points per game (normalized)</li>
-          <li>• <strong>Fixture Difficulty:</strong> Based on win probability from xG model (1-5 scale)</li>
-          <li>• <strong>Position Factor:</strong> Attackers weighted higher than defenders</li>
-          <li>• <strong>Team Strength:</strong> Based on expected goals for the fixture</li>
-          <li>• <strong>Home Advantage:</strong> 10% bonus for home fixtures</li>
-          <li>• <strong>Clean Sheet Bonus:</strong> Small bonus for defenders/keepers in favorable fixtures</li>
+          <li>• <strong>Goal:</strong> 6 points (any position)</li>
+          <li>• <strong>Assist:</strong> 4 points (any position)</li>
+          <li>• <strong>Clean Sheet:</strong> 6 points (DEF/GK only)</li>
+          <li>• <strong>Base Appearance:</strong> 2 points (if played, no other points)</li>
+          <li>• <strong>Total:</strong> Sum of all applicable points</li>
         </ul>
+        <p className="text-xs text-gray-500 mt-2">
+          Note: This is a custom scoring system for GW9 analysis. Official FPL scoring differs.
+        </p>
       </div>
       </div>
     </div>

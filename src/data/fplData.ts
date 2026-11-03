@@ -3,8 +3,13 @@ export interface FPLPlayer {
   name: string;
   team: string;
   position: 'GK' | 'DEF' | 'MID' | 'FWD';
-  points: number;
+  points: number; // Total points (GW1-8)
   cost: number;
+  // GW9 stats (optional, will be calculated)
+  gw9Points?: number;
+  gw9Goals?: number;
+  gw9Assists?: number;
+  gw9CleanSheet?: boolean;
 }
 
 export const fplPlayers: FPLPlayer[] = [
