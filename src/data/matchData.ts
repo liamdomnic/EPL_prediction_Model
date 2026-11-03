@@ -166,6 +166,20 @@ export const gw9Results = [
   { homeTeam: "Newcastle", awayTeam: "Everton", homeGoals: 0, awayGoals: 1, result: "A" as const },
 ];
 
+// GW10 Fixtures (upcoming)
+export const gw10Fixtures = [
+  { homeTeam: "Everton", awayTeam: "Coventry" },
+  { homeTeam: "Leeds", awayTeam: "Tottenham" },
+  { homeTeam: "Arsenal", awayTeam: "Hull" },
+  { homeTeam: "Fulham", awayTeam: "Newcastle" },
+  { homeTeam: "Nott'm Forest", awayTeam: "Man City" },
+  { homeTeam: "Brighton", awayTeam: "Brentford" },
+  { homeTeam: "Crystal Palace", awayTeam: "Liverpool" },
+  { homeTeam: "Ipswich", awayTeam: "Bournemouth" },
+  { homeTeam: "Sunderland", awayTeam: "Chelsea" },
+  { homeTeam: "Man United", awayTeam: "Aston Villa" },
+];
+
 // Get all unique teams
 export const teams = Array.from(new Set([
   ...matchData.map(m => m.homeTeam),
