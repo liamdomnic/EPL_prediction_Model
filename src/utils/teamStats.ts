@@ -1,4 +1,4 @@
-import { matchData, MatchData, teams } from '../data/matchData';
+import { matchData, MatchData, teams, gw9Results } from '../data/matchData';
 
 export interface TeamStats {
   name: string;
@@ -64,6 +64,10 @@ export function calculateTeamStats(teamName: string): TeamStats {
   const awayMatches = matchData.filter(m => m.awayTeam === teamName);
   const allMatches = [...homeMatches, ...awayMatches];
   
+  // Add GW9 results
+  const gw9HomeMatches = gw9Results.filter(m => m.homeTeam === teamName);
+  const gw9AwayMatches = gw9Results.filter(m => m.awayTeam === teamName);
+  
   // Sort by date to get recent form
   allMatches.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
@@ -125,12 +129,52 @@ export function calculateTeamStats(teamName: string): TeamStats {
     }
   });
   
-  // Recent form (last 5 games)
+  // Process GW9 results
+  gw9HomeMatches.forEach(match => {
+    const teamGoals = match.homeGoals;
+    const opponentGoals = match.awayGoals;
+    
+    goalsFor += teamGoals;
+    goalsAgainst += opponentGoals;
+    homeGoalsFor += teamGoals;
+    homeGoalsAgainst += opponentGoals;
+    
+    if (match.result === 'H') {
+      wins++;
+      homeWins++;
+    } else if (match.result === 'D') {
+      draws++;
+    } else {
+      losses++;
+    }
+  });
+  
+  gw9AwayMatches.forEach(match => {
+    const teamGoals = match.awayGoals;
+    const opponentGoals = match.homeGoals;
+    
+    goalsFor += teamGoals;
+    goalsAgainst += opponentGoals;
+    awayGoalsFor += teamGoals;
+    awayGoalsAgainst += opponentGoals;
+    
+    if (match.result === 'A') {
+      wins++;
+      awayWins++;
+    } else if (match.result === 'D') {
+      draws++;
+    } else {
+      losses++;
+    }
+  });
+  
+  // Recent form (last 5 games including GW9)
   const form: ('W' | 'D' | 'L')[] = [];
-  const recentMatches = allMatches.slice(-5);
   let formPoints = 0;
   
-  recentMatches.forEach(match => {
+  // Get last 4 games from GW1-8
+  const recentGW1to8 = allMatches.slice(-4);
+  recentGW1to8.forEach(match => {
     const isHome = match.homeTeam === teamName;
     const teamGoals = isHome ? match.fthg : match.ftag;
     const opponentGoals = isHome ? match.ftag : match.fthg;
@@ -146,8 +190,27 @@ export function calculateTeamStats(teamName: string): TeamStats {
     }
   });
   
-  // Calculate per-game averages
-  const played = allMatches.length;
+  // Add GW9 result
+  const gw9Match = gw9Results.find(m => m.homeTeam === teamName || m.awayTeam === teamName);
+  if (gw9Match) {
+    const isHome = gw9Match.homeTeam === teamName;
+    const teamGoals = isHome ? gw9Match.homeGoals : gw9Match.awayGoals;
+    const opponentGoals = isHome ? gw9Match.awayGoals : gw9Match.homeGoals;
+    
+    if (teamGoals > opponentGoals) {
+      form.push('W');
+      formPoints += 3;
+    } else if (teamGoals === opponentGoals) {
+      form.push('D');
+      formPoints += 1;
+    } else {
+      form.push('L');
+    }
+  }
+  
+  // Calculate per-game averages (including GW9)
+  const gw9MatchesPlayed = gw9HomeMatches.length + gw9AwayMatches.length;
+  const played = allMatches.length + gw9MatchesPlayed;
   const xgPerGame = played > 0 ? xgFor / played : 0;
   const xgAgainstPerGame = played > 0 ? xgAgainst / played : 0;
   const shotsPerGame = played > 0 ? shots / played : 0;
@@ -156,13 +219,15 @@ export function calculateTeamStats(teamName: string): TeamStats {
   const cornersPerGame = played > 0 ? corners / played : 0;
   const foulsPerGame = played > 0 ? fouls / played : 0;
   
-  // League averages (for strength calculations)
-  const totalGoals = matchData.reduce((sum, m) => sum + m.fthg + m.ftag, 0);
-  const totalMatches = matchData.length;
-  const avgGoalsPerGame = totalGoals / totalMatches;
+  // League averages (for strength calculations) - including GW9
+  const totalGoalsGW1to8 = matchData.reduce((sum, m) => sum + m.fthg + m.ftag, 0);
+  const totalGoalsGW9 = gw9Results.reduce((sum, m) => sum + m.homeGoals + m.awayGoals, 0);
+  const totalGoals = totalGoalsGW1to8 + totalGoalsGW9;
+  const totalMatches = matchData.length + gw9Results.length;
+  const avgGoalsPerGame = totalMatches > 0 ? totalGoals / totalMatches : 0;
   
   const totalXg = matchData.reduce((sum, m) => sum + m.hxg + m.axg, 0);
-  const avgXgPerGame = totalXg / totalMatches;
+  const avgXgPerGame = matchData.length > 0 ? totalXg / matchData.length : 0;
   
   // Attack and defense strength (relative to league average)
   const goalsPerGame = played > 0 ? goalsFor / played : 0;
@@ -171,9 +236,9 @@ export function calculateTeamStats(teamName: string): TeamStats {
   const attackStrength = avgGoalsPerGame > 0 ? goalsPerGame / avgGoalsPerGame : 1;
   const defenseStrength = avgGoalsPerGame > 0 ? goalsAgainstPerGame / avgGoalsPerGame : 1;
   
-  // Home advantage
-  const homeGamesPlayed = homeMatches.length;
-  const awayGamesPlayed = awayMatches.length;
+  // Home advantage (including GW9)
+  const homeGamesPlayed = homeMatches.length + gw9HomeMatches.length;
+  const awayGamesPlayed = awayMatches.length + gw9AwayMatches.length;
   const homeGoalsPerGame = homeGamesPlayed > 0 ? homeGoalsFor / homeGamesPlayed : 0;
   const awayGoalsPerGame = awayGamesPlayed > 0 ? awayGoalsFor / awayGamesPlayed : 0;
   const homeAdvantage = awayGoalsPerGame > 0 ? homeGoalsPerGame / awayGoalsPerGame : 1;
